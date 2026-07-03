@@ -128,27 +128,27 @@ Endpoints (JSON): `GET /api/status` (latest snapshot + connection state + poller
 ### Task 8: Frontend scaffold + API layer
 **Files:** `web/src/{main.tsx, App.tsx, api.ts, format.ts}`, `components/Layout.tsx`.
 Layout: desktop fixed sidebar (Dashboard/Trips/Charging/Vehicle/Settings), mobile bottom tabs (CSS breakpoint 768px). `api.ts`: thin typed fetch wrapper. `format.ts`: en-GB date, `Hh Mmin`, 2dp/1dp rounding helpers (unit-tested with vitest).
-- [ ] Scaffold, format tests, routing renders all 5 pages → commit
+- [x] Scaffold, format tests, routing renders all 5 pages → commit
 
 ### Task 9: Dashboard page
 StatCards (total km, avg kWh/100km, total kWh, total EUR, trips, sessions) from `/api/stats`; Recharts line chart of consumption trend; recent 5 trips/charges lists.
-- [ ] Implement + commit
+- [x] Implement + commit
 
 ### Task 10: Trips page
 Paginated list newest-first, add/edit/delete via `EntityModal` (local-time datetime inputs → UTC), optional Leaflet route map from `/api/trips/:id/positions`.
-- [ ] Implement + commit
+- [x] Implement + commit
 
 ### Task 11: Charging page
 Summary header (count, Σ kWh, Σ EUR) + list + CRUD modal (charger type select home/ac/dc, price auto-fills cost = energy × price when cost empty).
-- [ ] Implement + commit
+- [x] Implement + commit
 
 ### Task 12: Vehicle live page
 Auto-refresh `/api/status` every 30 s; Leaflet map of parked position; battery gauge (SOC + target-SOC marker); range/odometer; charging/plug/climate/lock badges; Sync Now button → `POST /api/sync`; stale-data banner showing snapshot age when VW unreachable.
-- [ ] Implement + commit
+- [x] Implement + commit
 
 ### Task 13: Settings page
 Form: VW email, password (write-only field, placeholder shows "set"), VIN, poll interval, battery capacity, price + currency, position toggle, SOC-delta toggle + threshold; Connect & Sync button; connection status indicator (source: api/web/disconnected).
-- [ ] Implement + commit
+- [x] Implement + commit
 
 ### Task 14: Boot integration, Docker, README
 `server/src/index.ts`: migrate → reconcileOnBoot → poller.start (if credentials configured) → serve `web/dist` static + SPA fallback → listen :3000. Multi-stage Dockerfile (build web+server → slim runtime, `VOLUME /app/data`). README: setup, docker run, architecture map.
