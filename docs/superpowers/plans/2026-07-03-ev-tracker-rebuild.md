@@ -54,9 +54,9 @@ README.md
 ### Task 0: Repo bootstrap + preserved docs
 **Files:** Create `package.json`, `server/package.json`, `web/` (vite scaffold), `server/tsconfig.json`, `.gitignore`, `README.md` stub; append addendum to `docs/vw-auth-migration.md`.
 - [x] Copy `docs/vw-auth-migration.md` + web-fallback spec from wv (DONE 2026-07-03)
-- [ ] Append addendum to `docs/vw-auth-migration.md`: "2026-06 update — implicit grant disabled; use `response_type=code` + PKCE, exchange at `POST {BFF}/auth/v1/idk/oidc/token` with headers `x-qmauth` (HMAC scheme, see crypto.ts), `x-android-package-name: com.volkswagen.weconnect`, `x-platform: android`, `x-assertion: 0`, VW app UA, and body echoing `response_type=token id_token` (omitting it 502s). Refresh token IS returned; use `grant_type=refresh_token` (same header/echo quirks) before falling back to full re-login."
-- [ ] npm workspaces root; `server`: typescript, fastify, better-sqlite3, zod, vitest, tsx; `web`: vite react-ts template + react-router-dom, recharts, leaflet, react-leaflet
-- [ ] `git add -A && git commit -m "chore: bootstrap workspaces, preserve VW protocol docs"` (first commit — include GOAL.md, run-goal.sh)
+- [x] Append addendum to `docs/vw-auth-migration.md`: "2026-06 update — implicit grant disabled; use `response_type=code` + PKCE, exchange at `POST {BFF}/auth/v1/idk/oidc/token` with headers `x-qmauth` (HMAC scheme, see crypto.ts), `x-android-package-name: com.volkswagen.weconnect`, `x-platform: android`, `x-assertion: 0`, VW app UA, and body echoing `response_type=token id_token` (omitting it 502s). Refresh token IS returned; use `grant_type=refresh_token` (same header/echo quirks) before falling back to full re-login."
+- [x] npm workspaces root; `server`: typescript, fastify, better-sqlite3, zod, vitest, tsx; `web`: vite react-ts template + react-router-dom, recharts, leaflet, react-leaflet
+- [x] `git add -A && git commit -m "chore: bootstrap workspaces, preserve VW protocol docs"` (first commit — include GOAL.md, run-goal.sh)
 
 ### Task 1: SQLite layer + migrations
 **Files:** `server/src/db/connection.ts`, `migrate.ts`, `migrations/001-init.sql`; tests `server/test/db/migrate.test.ts`.
@@ -90,7 +90,7 @@ CREATE INDEX idx_status_ts ON vehicle_status(ts);
 ### Task 2: Repositories + domain metrics
 **Files:** `server/src/repo/*.ts`, `server/src/domain/{metrics.ts,types.ts}`; tests for each.
 **Produces:** typed CRUD per entity — `insertSnapshot(s)`, `latestSnapshot()`, `latestSnapshotBySource(src)`, `listTrips({limit,offset})`, `createTrip/updateTrip/deleteTrip`, `openTrip()/closeTrip()`, same for charging; `getSetting(key)/setSetting(key,value)/getSettings()`; `finalizeTrip(trip, caps): Trip` and `finalizeCharge(sess, caps)` in metrics.ts applying the Global Constraints formulas (manual wins, computed fills gaps, round energy/consumption 2dp, distance 1dp).
-- [ ] TDD each metric rule incl. edge cases (missing SOC → null energy; zero distance → null consumption; manual override preserved) → commit
+- [x] TDD each metric rule incl. edge cases (missing SOC → null energy; zero distance → null consumption; manual override preserved) → commit
 
 ### Task 3: VW primary client (port from wv)
 **Files:** `server/src/vw/api/{crypto,cookies,auth,client,extract,types}.ts`; tests `crypto.test.ts` (port), `extract.test.ts` (fixtures from wv `events.test.ts` where applicable).
