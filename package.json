@@ -1,0 +1,16 @@
+{
+  "name": "vw-ev-tracker",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Self-hosted EV tracker for a VW ID.7 — polls VW's connected-car backend, detects trips and charging sessions, and serves a web UI.",
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w server",
+    "build": "npm run build -w web && npm run build -w server",
+    "test": "npm test -w server && npm test -w web",
+    "start": "node server/dist/index.js"
+  }
+}
