@@ -107,7 +107,7 @@ Port from `wv/src/lib/vw/web/` per `docs/superpowers/specs/2026-06-03-myvw-web-d
 ### Task 5: Source orchestration + poller
 **Files:** `server/src/vw/source.ts`, `server/src/poller/poller.ts`; tests with injected fakes.
 **Produces:** `VehicleSource.poll(): Snapshot|null` — try primary; on primary auth/network failure switch to web fallback (insert range+odometer rows, `source='web'`, SOC/parking null, dedup on capturedAt); every fallback tick retries primary first and steps back on recovery. `Poller.start(intervalMin)/stop()/syncNow()` — overlap guard, reads interval from settings, restartable when settings change; each successful snapshot is passed to detection (Task 6 interface: `onSnapshot(prev, next)`); handler errors caught + logged, never crash the loop.
-- [ ] TDD state machine (primary-ok, primary-fail→web, web→recovery, dedup) → commit
+- [x] TDD state machine (primary-ok, primary-fail→web, web→recovery, dedup) → commit
 
 ### Task 6: Detection engine (the heart)
 **Files:** `server/src/poller/detection.ts`, `reconcile.ts`; extensive tests.
