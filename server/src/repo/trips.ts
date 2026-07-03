@@ -79,10 +79,18 @@ export function listTrips(
   return { items, total };
 }
 
-/** The currently open auto-detected trip (no end time), if any. */
-export function openTrip(db: Database.Database): Trip | null {
+/** The currently open detected trip (no end time) for a source, if any. */
+export function openTrip(db: Database.Database, source: string = "api"): Trip | null {
   const r = db
-    .prepare("SELECT * FROM trips WHERE end_ts IS NULL AND source = 'auto' ORDER BY start_ts DESC LIMIT 1")
-    .get();
+    .prepare("SELECT * FROM trips WHERE end_ts IS NULL AND source = ? ORDER BY start_ts DESC LIMIT 1")
+    .get(source);
+  return r ? rowToTrip(r) : null;
+}
+
+/** Most recent trip of a source (open or closed) — for continue-vs-new decisions. */
+export function latestTrip(db: Database.Database, source: string): Trip | null {
+  const r = db
+    .prepare("SELECT * FROM trips WHERE source = ? ORDER BY start_ts DESC, id DESC LIMIT 1")
+    .get(source);
   return r ? rowToTrip(r) : null;
 }

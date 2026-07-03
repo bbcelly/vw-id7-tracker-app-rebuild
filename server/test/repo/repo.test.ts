@@ -66,7 +66,7 @@ const trip = (over: Partial<TripInsert> = {}): TripInsert => ({
   consumption: 15.4,
   durationMin: 60,
   notes: null,
-  source: "auto",
+  source: "api",
   ...over,
 });
 
@@ -96,7 +96,7 @@ describe("trips repo", () => {
 
   it("openTrip finds the auto trip without endTs", () => {
     expect(trips.openTrip(db)).toBeNull();
-    trips.createTrip(db, trip({ endTs: null, source: "auto" }));
+    trips.createTrip(db, trip({ endTs: null, source: "api" }));
     expect(trips.openTrip(db)).not.toBeNull();
   });
 });
@@ -116,7 +116,7 @@ describe("charging repo", () => {
     lat: null,
     lon: null,
     notes: null,
-    source: "auto",
+    source: "api",
     ...over,
   });
 

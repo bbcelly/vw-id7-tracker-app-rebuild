@@ -14,7 +14,7 @@ const baseTrip: TripInsert = {
   consumption: null,
   durationMin: null,
   notes: null,
-  source: "auto",
+  source: "api",
 };
 
 describe("finalizeTrip", () => {
@@ -75,7 +75,7 @@ describe("finalizeCharge", () => {
     lat: null,
     lon: null,
     notes: null,
-    source: "auto",
+    source: "api",
   };
 
   it("computes charged energy from SOC delta", () => {

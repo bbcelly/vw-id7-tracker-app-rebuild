@@ -118,7 +118,7 @@ Port from `wv/src/lib/vw/web/` per `docs/superpowers/specs/2026-06-03-myvw-web-d
 - web-source rows: no flags available → delta reconstruction: odometer increased ⇒ synthesize closed trip; SOC rose while odometer flat ⇒ synthesize charging session. Never mix: only compare snapshots of the same source for delta logic.
 - SOC-delta heuristic (toggle + threshold setting): SOC rise ≥ threshold while parked and not flagged charging ⇒ charging session.
 - `reconcileOnBoot()`: close/discard orphaned open trips/sessions against latest snapshot.
-- [ ] TDD every rule above as its own test case before implementing → commit per rule-group
+- [x] TDD every rule above as its own test case before implementing → commit per rule-group
 
 ### Task 7: HTTP API
 **Files:** `server/src/http/server.ts` + `routes/*`; tests via `fastify.inject`.

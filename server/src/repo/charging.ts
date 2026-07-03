@@ -83,12 +83,35 @@ export function listSessions(
   return { items, total };
 }
 
-/** The currently open auto-detected charging session, if any. */
-export function openSession(db: Database.Database): ChargingSession | null {
+/** The currently open detected charging session for a source, if any. */
+export function openSession(db: Database.Database, source: string = "api"): ChargingSession | null {
   const r = db
-    .prepare("SELECT * FROM charging_sessions WHERE end_ts IS NULL AND source = 'auto' ORDER BY start_ts DESC LIMIT 1")
-    .get();
+    .prepare("SELECT * FROM charging_sessions WHERE end_ts IS NULL AND source = ? ORDER BY start_ts DESC LIMIT 1")
+    .get(source);
   return r ? rowToSession(r) : null;
+}
+
+/** Most recent session of a source — for continue-vs-new decisions. */
+export function latestSession(db: Database.Database, source: string): ChargingSession | null {
+  const r = db
+    .prepare("SELECT * FROM charging_sessions WHERE source = ? ORDER BY id DESC LIMIT 1")
+    .get(source);
+  return r ? rowToSession(r) : null;
+}
+
+/** A closed session of this source already covering [startTs, endTs]? */
+export function sessionCoveringWindow(
+  db: Database.Database,
+  source: string,
+  startTs: string,
+  endTs: string
+): boolean {
+  const r = db
+    .prepare(
+      "SELECT id FROM charging_sessions WHERE source = ? AND start_ts >= ? AND end_ts <= ? LIMIT 1"
+    )
+    .get(source, startTs, endTs);
+  return r !== undefined;
 }
 
 export function summary(db: Database.Database): {

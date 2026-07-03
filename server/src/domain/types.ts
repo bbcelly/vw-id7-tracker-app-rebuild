@@ -1,5 +1,5 @@
 export type StatusSource = "api" | "web" | "manual";
-export type EntitySource = "auto" | "manual";
+export type EntitySource = "api" | "web" | "manual";
 export type ChargerType = "home" | "ac" | "dc";
 
 export interface Snapshot {

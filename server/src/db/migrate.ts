@@ -43,7 +43,7 @@ const MIGRATIONS: Migration[] = [
         consumption REAL,
         duration_min REAL,
         notes TEXT,
-        source TEXT NOT NULL DEFAULT 'auto'
+        source TEXT NOT NULL DEFAULT 'manual'
       );
       CREATE TABLE charging_sessions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,7 +60,7 @@ const MIGRATIONS: Migration[] = [
         lat REAL,
         lon REAL,
         notes TEXT,
-        source TEXT NOT NULL DEFAULT 'auto'
+        source TEXT NOT NULL DEFAULT 'manual'
       );
       CREATE TABLE trip_positions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
