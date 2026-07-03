@@ -152,7 +152,7 @@ Form: VW email, password (write-only field, placeholder shows "set"), VIN, poll 
 
 ### Task 14: Boot integration, Docker, README
 `server/src/index.ts`: migrate → reconcileOnBoot → poller.start (if credentials configured) → serve `web/dist` static + SPA fallback → listen :3000. Multi-stage Dockerfile (build web+server → slim runtime, `VOLUME /app/data`). README: setup, docker run, architecture map.
-- [ ] Full test suite green, `docker build` succeeds (or documented if docker unavailable locally), commit
+- [x] Full test suite green; compiled prod path verified (node dist + static web). docker build not run locally — OrbStack daemon was off; Dockerfile follows the verified layout. Commit.
 
 ### Task 15: End-to-end verification
 - [ ] `npm test` all green; `npm run build` both workspaces; boot server against empty data dir; drive UI (verify skill): add manual trip + charge, check stats, settings round-trip, sync-now error path without credentials → fix anything found → final commit
