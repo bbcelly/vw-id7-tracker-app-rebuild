@@ -102,7 +102,7 @@ CREATE INDEX idx_status_ts ON vehicle_status(ts);
 **Files:** `server/src/vw/web/{session,fetch-status,extract}.ts`; test `extract.test.ts`.
 Port from `wv/src/lib/vw/web/` per `docs/superpowers/specs/2026-06-03-myvw-web-data-source-design.md`: authproxy login chain (separate cookie jars per domain), session persistence to `data/myvw-session.json`, data GETs with `x-csrf-token` + `content-type: application/json;version=1` + `user-id: __userId__`.
 **Produces:** `fetchWebStatus(username, password, vin): Promise<WebStatus|null>` (never throws) where `WebStatus={rangeKm,odometerKm,capturedAt,raw}`.
-- [ ] Port, TDD extract with fixtures → commit
+- [x] Port, TDD extract with fixtures → commit
 
 ### Task 5: Source orchestration + poller
 **Files:** `server/src/vw/source.ts`, `server/src/poller/poller.ts`; tests with injected fakes.
