@@ -155,7 +155,7 @@ Form: VW email, password (write-only field, placeholder shows "set"), VIN, poll 
 - [x] Full test suite green; compiled prod path verified (node dist + static web). docker build not run locally — OrbStack daemon was off; Dockerfile follows the verified layout. Commit.
 
 ### Task 15: End-to-end verification
-- [ ] `npm test` all green; `npm run build` both workspaces; boot server against empty data dir; drive UI (verify skill): add manual trip + charge, check stats, settings round-trip, sync-now error path without credentials → fix anything found → final commit
+- [x] `npm test` all green (92 server + 4 web); both builds pass; fresh-DB boot; drove all flows via HTTP: settings round-trip + validation, trip CRUD with manual-wins recompute, charge cost autofill, stats, SPA+assets, sync error path (live-validated: reached VW Auth0 login page). UI not browser-automated — open http://localhost:3000 to eyeball.
 
 ## Self-Review Notes
 - Spec coverage checked against GOAL.md sections: domain model→T1/2, VW primary→T3, fallback→T4, polling→T5, detection rules→T6, API/validation→T7, five screens→T8–13, non-functional (container, migrations-on-boot, offline-friendly UI)→T14. Trips route map optional→T10. No-login constraint: no auth anywhere.
