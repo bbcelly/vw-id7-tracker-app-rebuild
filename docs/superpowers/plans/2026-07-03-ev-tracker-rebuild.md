@@ -96,7 +96,7 @@ CREATE INDEX idx_status_ts ON vehicle_status(ts);
 **Files:** `server/src/vw/api/{crypto,cookies,auth,client,extract,types}.ts`; tests `crypto.test.ts` (port), `extract.test.ts` (fixtures from wv `events.test.ts` where applicable).
 **Port faithfully from `/Users/celly/q_projects/wv/src/lib/vw/api/`** — constants (`VW_CLIENT_ID a24fba63-…`, `weconnect://authenticated`, scope, `VW_RESPONSE_TYPE="code"`, hosts), `qmauthNow()` HMAC, cookie jar + manual-redirect walker, Auth0 `/u/login` scrape (browser UA!), resume chain, code exchange + refresh at `/auth/v1/idk/oidc/token` (VW app UA + qmauth headers + response_type echo). Adapt only: token/credential persistence → `settings` repo (keys `vw_tokens`, `vw_username`, `vw_password`); fail-loudly HTML dumps → logger.
 **Produces:** `VwClient` with `connect()`, `ensureToken()` (refresh→relogin ladder on expiry/401), `listVehicles(): vin[]`, `fetchStatus(vin): RawSelectiveStatus`, `fetchParkingPosition(vin)`; `extractSnapshot(raw, parking): SnapshotInsert` (pure, fixture-tested).
-- [ ] Port + adapt, TDD extract/crypto (network code covered by types + a manual smoke script `server/scripts/smoke-vw.ts`) → commit
+- [x] Port + adapt, TDD extract/crypto (network code covered by types + a manual smoke script `server/scripts/smoke-vw.ts`) → commit
 
 ### Task 4: VW web fallback (port from wv)
 **Files:** `server/src/vw/web/{session,fetch-status,extract}.ts`; test `extract.test.ts`.
