@@ -85,7 +85,7 @@ CREATE TABLE trip_positions (
 CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
 CREATE INDEX idx_status_ts ON vehicle_status(ts);
 ```
-- [ ] TDD: failing test (migrations run twice → no error, tables exist) → implement → pass → commit
+- [x] TDD: failing test (migrations run twice → no error, tables exist) → implement → pass → commit
 
 ### Task 2: Repositories + domain metrics
 **Files:** `server/src/repo/*.ts`, `server/src/domain/{metrics.ts,types.ts}`; tests for each.
