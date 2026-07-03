@@ -123,7 +123,7 @@ Port from `wv/src/lib/vw/web/` per `docs/superpowers/specs/2026-06-03-myvw-web-d
 ### Task 7: HTTP API
 **Files:** `server/src/http/server.ts` + `routes/*`; tests via `fastify.inject`.
 Endpoints (JSON): `GET /api/status` (latest snapshot + connection state + poller state), `POST /api/sync` (syncNow), `GET/POST /api/trips`, `PATCH/DELETE /api/trips/:id`, same for `/api/charging`, `GET /api/stats` (totals: distance, avg consumption, energy charged, cost, counts + last-20-trips consumption series), `GET /api/settings` (password masked as `"•••"` when set, never returned), `PUT /api/settings` (password only updated when non-empty value sent; validates poll_interval 1–60, battery capacity >0, SOC threshold 1–50), `POST /api/connect` (connect & sync, returns {connected, vin, source}), `GET /api/trips/:id/positions`. zod validation on every write; strip `id`/`source` from client payloads; pagination per Global Constraints.
-- [ ] TDD routes (validation rejects, pagination, password masking, source stripping) → commit per route group
+- [x] TDD routes (validation rejects, pagination, password masking, source stripping) → commit per route group
 
 ### Task 8: Frontend scaffold + API layer
 **Files:** `web/src/{main.tsx, App.tsx, api.ts, format.ts}`, `components/Layout.tsx`.
