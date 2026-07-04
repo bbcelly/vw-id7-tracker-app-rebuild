@@ -1,5 +1,5 @@
 import { loginMyVw, loadSession, saveSession, type MyVwSession } from "./session.js";
-import { fetchRangeAndOdometer, fetchVehicleRelations } from "./fetch-status.js";
+import { fetchRangeAndOdometer, fetchVehicleRelations, fetchVehicleSpec, netFromGrossKwh } from "./fetch-status.js";
 import { extractWebStatus, type WebStatus } from "./extract.js";
 
 export type { WebStatus };
@@ -20,6 +20,37 @@ export async function fetchWebVins(username: string, password: string): Promise<
     return (await fetchVehicleRelations(fresh)).vins;
   } catch (err) {
     console.warn(`[VW WEB] vehicle list failed: ${err instanceof Error ? err.message : err}`);
+    return null;
+  }
+}
+
+export interface WebVehicleSpec {
+  netBatteryKwh: number | null;
+  modelName: string | null;
+}
+
+/** Battery capacity (usable kWh) + model name via the portal (session reuse,
+ *  relogin once). Never throws — null on failure. */
+export async function fetchWebSpec(
+  username: string,
+  password: string,
+  vin: string
+): Promise<WebVehicleSpec | null> {
+  try {
+    const toSpec = (r: { grossBatteryKwh: number | null; modelName: string | null }): WebVehicleSpec => ({
+      netBatteryKwh: r.grossBatteryKwh === null ? null : netFromGrossKwh(r.grossBatteryKwh),
+      modelName: r.modelName,
+    });
+    const cached = loadSession();
+    if (cached) {
+      const r = await fetchVehicleSpec(cached, vin);
+      if (!r.unauthorized && (r.grossBatteryKwh !== null || r.modelName !== null)) return toSpec(r);
+    }
+    const fresh: MyVwSession = await loginMyVw(username, password);
+    saveSession(fresh);
+    return toSpec(await fetchVehicleSpec(fresh, vin));
+  } catch (err) {
+    console.warn(`[VW WEB] vehicle spec failed: ${err instanceof Error ? err.message : err}`);
     return null;
   }
 }

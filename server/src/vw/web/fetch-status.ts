@@ -65,6 +65,49 @@ export async function fetchVehicleRelations(
   }
 }
 
+// Usable (net) capacity per VW ID gross pack size — VW only publishes gross.
+// Unknown packs fall back to the ~94% net/gross ratio the known packs share.
+const GROSS_TO_NET_KWH: Record<number, number> = { 48: 45, 62: 58, 82: 77, 84: 79, 91: 86 };
+
+export function netFromGrossKwh(gross: number): number {
+  return GROSS_TO_NET_KWH[gross] ?? Math.round(gross * 0.94);
+}
+
+/** Vehicle spec via the GVF (group-vehicle-file) service: gross HV-battery
+ *  capacity + model name. The battery is the largest kWh figure in the spec
+ *  list (the 12 V battery is listed in Ah), locale-independent. */
+export async function fetchVehicleSpec(
+  s: MyVwSession,
+  vin: string,
+  fetchFn: typeof fetch = fetch
+): Promise<{ grossBatteryKwh: number | null; modelName: string | null; unauthorized: boolean }> {
+  const headers = { ...dataHeaders(s), traceId: crypto.randomUUID() };
+  const resp = await fetchFn(
+    `${BASE}/vw-phs/proxy/vehicles/${vin}/details/cs-CZ?resourceHost=cwat-group-vehicle-file-service-prod`,
+    { headers }
+  );
+  if (resp.status === 401) return { grossBatteryKwh: null, modelName: null, unauthorized: true };
+  if (!resp.ok) return { grossBatteryKwh: null, modelName: null, unauthorized: false };
+  try {
+    const body = (await resp.json()) as { modelName?: unknown; specifications?: { codeText?: unknown }[] };
+    let gross: number | null = null;
+    for (const spec of body.specifications ?? []) {
+      if (typeof spec.codeText !== "string") continue;
+      const m = /(\d+(?:[.,]\d+)?)\s*kWh/i.exec(spec.codeText);
+      if (!m) continue;
+      const v = parseFloat(m[1].replace(",", "."));
+      if (gross === null || v > gross) gross = v;
+    }
+    return {
+      grossBatteryKwh: gross,
+      modelName: typeof body.modelName === "string" ? body.modelName : null,
+      unauthorized: false,
+    };
+  } catch {
+    return { grossBatteryKwh: null, modelName: null, unauthorized: false };
+  }
+}
+
 export async function fetchRangeAndOdometer(
   s: MyVwSession,
   vin: string,

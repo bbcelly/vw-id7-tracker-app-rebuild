@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import Database from "better-sqlite3";
 import type { FastifyInstance } from "fastify";
 import { runMigrations } from "../../src/db/migrate.js";
-import { buildServer } from "../../src/http/server.js";
+import { buildServer, type AppDeps } from "../../src/http/server.js";
 import { Poller } from "../../src/poller/poller.js";
 import { Detector } from "../../src/poller/detection.js";
 import { VehicleSource } from "../../src/vw/source.js";
@@ -21,6 +21,7 @@ beforeEach(async () => {
       fetchIdData: async () => ({}),
     },
     fetchWeb: async () => null,
+    fetchWebVins: async () => null,
     getCredentials: () => null,
     getVin: () => null,
     setVin: () => {},
@@ -40,7 +41,7 @@ beforeEach(async () => {
     () => {}
   );
   const poller = new Poller(db, source, detector, { intervalMin: () => 5, now: () => new Date() }, () => {});
-  app = buildServer({ db, poller, source });
+  app = buildServer({ db, poller, source, fetchWebSpec: async () => null });
   await app.ready();
 });
 
@@ -308,29 +309,37 @@ describe("status API", () => {
   });
 });
 
+const WEB = {
+  rangeKm: 400, odometerKm: 1200, socPercent: 70, isCharging: false,
+  isPlugged: false, chargingState: "readyForCharging", externalPower: "unavailable",
+  capturedAt: new Date("2026-07-03T10:00:00.000Z"), raw: {},
+};
+
+// Connected-via-web app whose spec fetch is a controllable fake.
+function buildConnectedApp(fetchWebSpec: AppDeps["fetchWebSpec"]): { app: FastifyInstance; poller: Poller } {
+  const source = new VehicleSource({
+    api: { listVehicles: async () => { throw new Error("502"); }, fetchIdData: async () => { throw new Error("502"); } },
+    fetchWeb: async () => WEB,
+    fetchWebVins: async () => null,
+    getCredentials: () => ({ username: "u", password: "p" }),
+    getVin: () => "VIN1",
+    setVin: () => {},
+    log: () => {},
+  });
+  const detector = new Detector(db, {
+    batteryKwh: () => 77, positionTrackingEnabled: () => false, socDeltaEnabled: () => false,
+    socDeltaThresholdPct: () => 2, pollIntervalMs: () => 300_000, debounceMs: () => 180_000,
+    now: () => new Date(),
+  }, () => {});
+  const poller = new Poller(db, source, detector, { intervalMin: () => 5, now: () => new Date() }, () => {});
+  return { app: buildServer({ db, poller, source, fetchWebSpec }), poller };
+}
+
 describe("connect starts the poller", () => {
   it("starts the poll loop when connected even if the poll deduped", async () => {
     await app.close();
-    const WEB = {
-      rangeKm: 400, odometerKm: 1200, socPercent: 70, isCharging: false,
-      isPlugged: false, chargingState: "readyForCharging", externalPower: "unavailable",
-      capturedAt: new Date("2026-07-03T10:00:00.000Z"), raw: {},
-    };
-    const source = new VehicleSource({
-      api: { listVehicles: async () => { throw new Error("502"); }, fetchIdData: async () => { throw new Error("502"); } },
-      fetchWeb: async () => WEB,
-      getCredentials: () => ({ username: "u", password: "p" }),
-      getVin: () => "VIN1",
-      setVin: () => {},
-      log: () => {},
-    });
-    const detector = new Detector(db, {
-      batteryKwh: () => 77, positionTrackingEnabled: () => false, socDeltaEnabled: () => false,
-      socDeltaThresholdPct: () => 2, pollIntervalMs: () => 300_000, debounceMs: () => 180_000,
-      now: () => new Date(),
-    }, () => {});
-    const poller = new Poller(db, source, detector, { intervalMin: () => 5, now: () => new Date() }, () => {});
-    app = buildServer({ db, poller, source });
+    let poller: Poller;
+    ({ app, poller } = buildConnectedApp(async () => null));
     await app.ready();
 
     await poller.syncNow(); // stores the web row → the next poll dedups
@@ -340,5 +349,50 @@ describe("connect starts the poller", () => {
     expect(res.snapshot).toBeNull(); // deduped
     expect(poller.running).toBe(true); // must start anyway
     poller.stop();
+  });
+});
+
+describe("connect detects battery capacity", () => {
+  beforeEach(async () => {
+    await app.close();
+    setSetting(db, "vw_username", "u");
+    setSetting(db, "vw_password", "p");
+    setSetting(db, "vw_vin", "VIN1");
+  });
+
+  async function connect(fetchWebSpec: AppDeps["fetchWebSpec"]): Promise<Poller> {
+    let poller: Poller;
+    ({ app, poller } = buildConnectedApp(fetchWebSpec));
+    await app.ready();
+    await app.inject({ method: "POST", url: "/api/connect" });
+    poller.stop();
+    return poller;
+  }
+
+  it("fills battery_capacity_kwh from the detected spec when the setting is the untouched default", async () => {
+    setSetting(db, "battery_capacity_kwh", "77");
+    await connect(async () => ({ netBatteryKwh: 86, modelName: "ID.7 Tourer Pro S" }));
+    expect(getSetting(db, "battery_capacity_kwh")).toBe("86");
+    expect(getSetting(db, "detected_battery_kwh")).toBe("86");
+    expect(getSetting(db, "vehicle_model")).toBe("ID.7 Tourer Pro S");
+  });
+
+  it("records the detected value but never overwrites a customized capacity", async () => {
+    setSetting(db, "battery_capacity_kwh", "80");
+    await connect(async () => ({ netBatteryKwh: 86, modelName: null }));
+    expect(getSetting(db, "battery_capacity_kwh")).toBe("80");
+    expect(getSetting(db, "detected_battery_kwh")).toBe("86");
+  });
+
+  it("only detects once — skips the spec fetch when detected_battery_kwh exists", async () => {
+    setSetting(db, "detected_battery_kwh", "86");
+    let called = 0;
+    await connect(async () => { called++; return { netBatteryKwh: 86, modelName: null }; });
+    expect(called).toBe(0);
+  });
+
+  it("does not mark detection done when the spec fetch fails", async () => {
+    await connect(async () => null);
+    expect(getSetting(db, "detected_battery_kwh")).toBeNull();
   });
 });

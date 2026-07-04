@@ -13,7 +13,7 @@ import * as snapshotsRepo from "./repo/snapshots.js";
 import { DEFAULT_BATTERY_KWH, DEFAULT_POLL_INTERVAL_MIN } from "./domain/types.js";
 import { VwApiClient } from "./vw/api/client.js";
 import { createSettingsTokenStore, loadCredentials } from "./vw/api/tokens.js";
-import { fetchWebStatus, fetchWebVins } from "./vw/web/index.js";
+import { fetchWebStatus, fetchWebVins, fetchWebSpec } from "./vw/web/index.js";
 import { VehicleSource } from "./vw/source.js";
 import { Detector } from "./poller/detection.js";
 import { Poller } from "./poller/poller.js";
@@ -56,7 +56,7 @@ const poller = new Poller(db, source, detector, {
 // open rows are api-source; the poller re-runs this on primary recovery.)
 detector.reconcile(snapshotsRepo.latestSnapshotBySource(db, "api"));
 
-const app = buildServer({ db, poller, source });
+const app = buildServer({ db, poller, source, fetchWebSpec });
 
 // Serve the built frontend when present (single-container deployment).
 const webDist = resolve(dirname(fileURLToPath(import.meta.url)), "../../web/dist");

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fetchVehicleRelations } from "../../../src/vw/web/fetch-status.js";
+import { fetchVehicleRelations, fetchVehicleSpec, netFromGrossKwh } from "../../../src/vw/web/fetch-status.js";
 import type { MyVwSession } from "../../../src/vw/web/session.js";
 
 const SESSION: MyVwSession = { cookies: { SESSION: "abc", csrf_token: "tok" }, csrfToken: "tok" };
@@ -20,6 +20,66 @@ function fakeFetch(status: number, body: unknown): { fn: typeof fetch; calls: { 
   }) as typeof fetch;
   return { fn, calls };
 }
+
+const DETAILS = {
+  modelName: "ID.7 Tourer Pro S",
+  engine: "210 kW (286 PS)",
+  specifications: [
+    { codeText: "Stejnosměrné nabíjení baterie (provedení 3)", origin: "L" },
+    { codeText: "Vysokonapěťový akumulátor 91 kWh (brutto)", origin: "L" },
+    { codeText: "Baterie 280 A (46 Ah)", origin: "L" },
+    { codeText: "Přídavné topení 5.5 kWh rekuperace", origin: "L" },
+  ],
+};
+
+describe("fetchVehicleSpec", () => {
+  it("extracts the gross battery kWh (largest kWh figure) and the model name", async () => {
+    const { fn } = fakeFetch(200, DETAILS);
+    const r = await fetchVehicleSpec(SESSION, "WVWZZZED4SE034784", fn);
+    expect(r.unauthorized).toBe(false);
+    expect(r.grossBatteryKwh).toBe(91);
+    expect(r.modelName).toBe("ID.7 Tourer Pro S");
+  });
+
+  it("calls the GVF details endpoint for the VIN with a traceId header", async () => {
+    const { fn, calls } = fakeFetch(200, DETAILS);
+    await fetchVehicleSpec(SESSION, "VIN123", fn);
+    expect(calls[0].url).toBe(
+      "https://www.myvolkswagen.net/app/authproxy/vw-phs/proxy/vehicles/VIN123/details/cs-CZ?resourceHost=cwat-group-vehicle-file-service-prod"
+    );
+    expect(calls[0].headers.get("traceId")).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it("reports an expired session as unauthorized", async () => {
+    const { fn } = fakeFetch(401, "");
+    const r = await fetchVehicleSpec(SESSION, "VIN123", fn);
+    expect(r.unauthorized).toBe(true);
+    expect(r.grossBatteryKwh).toBeNull();
+  });
+
+  it("returns nulls on non-ok status, malformed bodies, and spec lists without kWh entries", async () => {
+    const { fn: f500 } = fakeFetch(500, "boom");
+    expect((await fetchVehicleSpec(SESSION, "V", f500)).grossBatteryKwh).toBeNull();
+    const { fn: fJunk } = fakeFetch(200, "not json");
+    expect((await fetchVehicleSpec(SESSION, "V", fJunk)).grossBatteryKwh).toBeNull();
+    const { fn: fNone } = fakeFetch(200, { modelName: "Golf", specifications: [{ codeText: "Baterie 280 A (46 Ah)" }] });
+    const r = await fetchVehicleSpec(SESSION, "V", fNone);
+    expect(r.grossBatteryKwh).toBeNull();
+    expect(r.modelName).toBe("Golf");
+  });
+});
+
+describe("netFromGrossKwh", () => {
+  it("maps known VW ID pack sizes to usable capacity", () => {
+    expect(netFromGrossKwh(91)).toBe(86);
+    expect(netFromGrossKwh(82)).toBe(77);
+    expect(netFromGrossKwh(62)).toBe(58);
+  });
+
+  it("falls back to ~94% of gross for unknown packs", () => {
+    expect(netFromGrossKwh(100)).toBe(94);
+  });
+});
 
 describe("fetchVehicleRelations", () => {
   it("extracts VINs from the VUM relations response", async () => {

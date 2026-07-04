@@ -315,3 +315,28 @@ Implemented as `fetchVehicleRelations` (`server/src/vw/web/fetch-status.ts`) +
 `fetchWebVins` (`server/src/vw/web/index.ts`); `VehicleSource.poll` calls it
 when the primary failed and no VIN is configured, so first-run Connect & Sync
 now succeeds on web-only.
+
+## 11. Vehicle spec (battery size, model) via GVF (2026-07-04, live-verified)
+
+The GVF (group-vehicle-file) service serves per-VIN spec data through the
+same authproxy session (same cookies + `traceId` header as §10):
+
+```
+GET …/authproxy/vw-phs/proxy/vehicles/{vin}/details/cs-CZ?resourceHost=cwat-group-vehicle-file-service-prod
+→ { modelName, engine, specifications: [{ codeText, origin }, …] }   // 157 entries for the ID.7
+GET …/vehicles/{vin}/data/cs-CZ?…        → { vin, modelName, exteriorColor }
+GET …/vehicles/{vin}/product-codes?family=MOT&… → { "MOT": "D7P" }   // drivetrain PR code
+```
+
+- The HV battery appears in `specifications[].codeText` as e.g.
+  `"Vysokonapěťový akumulátor 91 kWh (brutto)"` — **gross** capacity only.
+  The text is locale-dependent (path carries the locale) but the number
+  parses locale-independently; it is the largest kWh figure in the list
+  (the 12 V battery is listed in Ah).
+- Net (usable) capacity is not exposed; `netFromGrossKwh` maps the known
+  VW ID packs (48→45, 62→58, 82→77, 84→79, 91→86) and falls back to
+  ~94 % of gross.
+- Wired into `POST /api/connect`: one-time detection stores
+  `detected_battery_kwh` + `vehicle_model` and fills `battery_capacity_kwh`
+  only while it is unset or still the app default (77), so manual values are
+  never overwritten. Delete `detected_battery_kwh` to re-run detection.

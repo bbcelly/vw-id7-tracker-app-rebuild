@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type Database from "better-sqlite3";
 import type { Poller } from "../poller/poller.js";
 import type { VehicleSource } from "../vw/source.js";
+import type { WebVehicleSpec } from "../vw/web/index.js";
 import { registerStatusRoutes } from "./routes/status.js";
 import { registerTripRoutes } from "./routes/trips.js";
 import { registerChargingRoutes } from "./routes/charging.js";
@@ -12,6 +13,7 @@ export interface AppDeps {
   db: Database.Database;
   poller: Poller;
   source: VehicleSource;
+  fetchWebSpec: (username: string, password: string, vin: string) => Promise<WebVehicleSpec | null>;
 }
 
 export function buildServer(deps: AppDeps): FastifyInstance {
