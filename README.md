@@ -35,9 +35,21 @@ No MFA support — the VW account must be password-only.
 ## Run with Docker
 
 ```bash
+docker compose up -d          # builds locally on first run
+# or pull the published image instead of building:
+docker compose pull && docker compose up -d
+```
+
+Without compose:
+
+```bash
 docker build -t ev-tracker .
 docker run -d --name ev-tracker -p 3000:3000 -v ev_data:/app/data ev-tracker
 ```
+
+Images are published to `ghcr.io/bbcelly/vw-id7-tracker-app-rebuild` by the
+[build workflow](.github/workflows/docker-build.yml) on every push to master
+(`latest`, `sha-…`) and on `v*` tags (semver tags).
 
 Open http://localhost:3000, enter your VW credentials under **Settings**, hit
 **Connect & Sync**. The poll loop starts automatically (default every 5 min).
