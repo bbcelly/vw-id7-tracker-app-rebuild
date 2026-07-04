@@ -243,3 +243,38 @@ describe("status API", () => {
     expect(s.doorLockStatus).toBe("locked");
   });
 });
+
+describe("connect starts the poller", () => {
+  it("starts the poll loop when connected even if the poll deduped", async () => {
+    await app.close();
+    const WEB = {
+      rangeKm: 400, odometerKm: 1200, socPercent: 70, isCharging: false,
+      isPlugged: false, chargingState: "readyForCharging", externalPower: "unavailable",
+      capturedAt: new Date("2026-07-03T10:00:00.000Z"), raw: {},
+    };
+    const source = new VehicleSource({
+      api: { listVehicles: async () => { throw new Error("502"); }, fetchIdData: async () => { throw new Error("502"); } },
+      fetchWeb: async () => WEB,
+      getCredentials: () => ({ username: "u", password: "p" }),
+      getVin: () => "VIN1",
+      setVin: () => {},
+      log: () => {},
+    });
+    const detector = new Detector(db, {
+      batteryKwh: () => 77, positionTrackingEnabled: () => false, socDeltaEnabled: () => false,
+      socDeltaThresholdPct: () => 2, pollIntervalMs: () => 300_000, debounceMs: () => 180_000,
+      now: () => new Date(),
+    }, () => {});
+    const poller = new Poller(db, source, detector, { intervalMin: () => 5, now: () => new Date() }, () => {});
+    app = buildServer({ db, poller, source });
+    await app.ready();
+
+    await poller.syncNow(); // stores the web row → the next poll dedups
+    poller.stop();
+    const res = (await app.inject({ method: "POST", url: "/api/connect" })).json();
+    expect(res.connected).toBe(true);
+    expect(res.snapshot).toBeNull(); // deduped
+    expect(poller.running).toBe(true); // must start anyway
+    poller.stop();
+  });
+});

@@ -43,7 +43,9 @@ export function registerStatusRoutes(app: FastifyInstance, deps: AppDeps): void 
   // Connect & Sync from Settings: one immediate poll + (re)start the loop.
   app.post("/api/connect", async () => {
     const snapshot = await deps.poller.syncNow();
-    if (snapshot && !deps.poller.running) deps.poller.start();
+    // Start on any successful connection — the poll may have deduped (snapshot
+    // null) while the source is perfectly healthy.
+    if (deps.source.state !== "disconnected" && !deps.poller.running) deps.poller.start();
     return {
       connected: deps.source.state !== "disconnected",
       state: deps.source.state,

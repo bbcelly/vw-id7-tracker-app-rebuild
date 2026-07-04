@@ -272,3 +272,16 @@ therefore superseded for token acquisition; the login-page mechanics
 4. The exchange returns a **refresh_token**. Renew with
    `grant_type=refresh_token` (same headers + response_type echo); fall back to
    a full headless re-login only when refresh fails.
+
+### §9 status check (2026-07-04, live)
+
+The §9 flow is the correct *shape*, but the BFF exchange has NOT recovered for
+headless clients: `POST /auth/v1/idk/oidc/token` still answers
+`502 {"error":"unexpected error from upstream"}` (verified live 2026-07-04;
+the Auth0 login + authorization code stages succeed). The original project has
+had no `api`-source rows since 2026-05-30 and runs `data_source=web`.
+Practical consequence: the myvolkswagen.net web portal path (see the
+web-fallback design doc) is the *effective* data source — since 2026-06 it
+also carries SOC + charging + plug state via `charging/status`, so detection
+remains fully functional. Keep the primary client: every poll retries it
+first, so if VW ever fixes the exchange the app steps back up automatically.
