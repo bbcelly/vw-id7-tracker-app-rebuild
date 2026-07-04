@@ -12,6 +12,7 @@ export interface VehicleSourceDeps {
     fetchIdData(vin: string): Promise<VwIdData>;
   };
   fetchWeb(username: string, password: string, vin: string): Promise<WebStatus | null>;
+  fetchWebVins(username: string, password: string): Promise<string[] | null>;
   getCredentials(): Credentials | null;
   getVin(): string | null;
   setVin(vin: string): void;
@@ -85,15 +86,25 @@ export class VehicleSource {
       }
     }
 
-    // --- fallback: web portal (requires a configured VIN) ---
-    const vin = this.deps.getVin();
-    if (!vin) {
-      this.state = "disconnected";
-      return null;
-    }
+    // --- fallback: web portal ---
     if (!force && this.webSkip > 0) {
       this.webSkip--;
       return null;
+    }
+    // No VIN yet (primary normally auto-detects it, but it's down): try to
+    // discover it through the portal so a fresh install can bootstrap.
+    let vin = this.deps.getVin();
+    if (!vin) {
+      const vins = await this.deps.fetchWebVins(creds.username, creds.password);
+      if (!vins || vins.length === 0) {
+        this.webFailures++;
+        this.webSkip = VehicleSource.skipTicks(this.webFailures);
+        this.state = "disconnected";
+        return null;
+      }
+      vin = vins[0];
+      this.deps.setVin(vin);
+      this.log(`[source] auto-detected VIN ${vin} via web portal`);
     }
     const web = await this.deps.fetchWeb(creds.username, creds.password, vin);
     if (!web) {

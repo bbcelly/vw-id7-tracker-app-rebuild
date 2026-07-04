@@ -285,3 +285,33 @@ web-fallback design doc) is the *effective* data source — since 2026-06 it
 also carries SOC + charging + plug state via `charging/status`, so detection
 remains fully functional. Keep the primary client: every poll retries it
 first, so if VW ever fixes the exchange the app steps back up automatically.
+
+## 10. VIN discovery via the web portal (2026-07-04, live-verified)
+
+The primary API auto-detects the VIN (`GET /vehicle/v1/vehicles`), but with
+the BFF exchange dead (§9) a fresh install could never bootstrap: the web
+fallback needs a VIN for every endpoint it calls. The portal *does* expose
+the garage — the myvolkswagen.net "garage" feature app uses the VUM
+(vehicle-user-management) service through the same authproxy the fallback
+already authenticates against:
+
+```
+GET https://www.myvolkswagen.net/app/authproxy/vw-phs/proxy/v2/users/me/relations?resourceHost=myvw-vum-prod
+```
+
+- Same session cookies + `x-csrf-token` as the other proxy calls, **plus a
+  `traceId: <uuid>` header** — VUM answers `400 Required request header
+  'traceId'` without it.
+- Also reachable under the `vwag-weconnect` facet; no login-scope changes
+  needed (the existing `fag=vw-phs,vwag-weconnect` session already works).
+- Response: `relations[].vehicle.vin` (nullable — commission-only vehicles
+  have `vin: null` and a `commissionId` instead). `relations[]` also carries
+  nickname, license plate, role (`PRIMARY_USER`/`GUEST_USER`), `primaryCar`.
+- Provenance: not documented anywhere public; extracted from the portal's
+  garage feature-app bundle (`d1h0ekhw0xj4fu.cloudfront.net/feature-apps/garage/…`),
+  `VumClient.getUserVehicleRelations()`.
+
+Implemented as `fetchVehicleRelations` (`server/src/vw/web/fetch-status.ts`) +
+`fetchWebVins` (`server/src/vw/web/index.ts`); `VehicleSource.poll` calls it
+when the primary failed and no VIN is configured, so first-run Connect & Sync
+now succeeds on web-only.

@@ -40,6 +40,31 @@ async function getJson(
   }
 }
 
+/** List the account's vehicles via the VUM relations endpoint. Used to
+ *  bootstrap the VIN when the primary API is down (it normally auto-detects).
+ *  vins: null = request failed, [] = account genuinely has no vehicles. */
+export async function fetchVehicleRelations(
+  s: MyVwSession,
+  fetchFn: typeof fetch = fetch
+): Promise<{ vins: string[] | null; unauthorized: boolean }> {
+  // VUM rejects requests without a traceId header outright (400).
+  const headers = { ...dataHeaders(s), traceId: crypto.randomUUID() };
+  const resp = await fetchFn(`${BASE}/vw-phs/proxy/v2/users/me/relations?resourceHost=myvw-vum-prod`, {
+    headers,
+  });
+  if (resp.status === 401) return { vins: null, unauthorized: true };
+  if (!resp.ok) return { vins: null, unauthorized: false };
+  try {
+    const body = (await resp.json()) as { relations?: { vehicle?: { vin?: string | null } }[] };
+    const vins = (body.relations ?? [])
+      .map((r) => r.vehicle?.vin)
+      .filter((v): v is string => typeof v === "string" && v.length > 0);
+    return { vins, unauthorized: false };
+  } catch {
+    return { vins: null, unauthorized: false };
+  }
+}
+
 export async function fetchRangeAndOdometer(
   s: MyVwSession,
   vin: string,

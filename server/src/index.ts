@@ -13,7 +13,7 @@ import * as snapshotsRepo from "./repo/snapshots.js";
 import { DEFAULT_BATTERY_KWH, DEFAULT_POLL_INTERVAL_MIN } from "./domain/types.js";
 import { VwApiClient } from "./vw/api/client.js";
 import { createSettingsTokenStore, loadCredentials } from "./vw/api/tokens.js";
-import { fetchWebStatus } from "./vw/web/index.js";
+import { fetchWebStatus, fetchWebVins } from "./vw/web/index.js";
 import { VehicleSource } from "./vw/source.js";
 import { Detector } from "./poller/detection.js";
 import { Poller } from "./poller/poller.js";
@@ -26,6 +26,7 @@ const apiClient = new VwApiClient(createSettingsTokenStore(db), () => loadCreden
 const source = new VehicleSource({
   api: apiClient,
   fetchWeb: fetchWebStatus,
+  fetchWebVins,
   getCredentials: () => loadCredentials(db),
   getVin: () => getSetting(db, "vw_vin"),
   setVin: (vin) => setSetting(db, "vw_vin", vin),
