@@ -22,7 +22,7 @@ type Draft = {
 
 const emptyDraft: Draft = {
   startTs: "", endTs: "", startSoc: "", endSoc: "", energyKwh: "",
-  cost: "", pricePerKwh: "", maxPowerKw: "", chargerType: "", location: "", notes: "",
+  cost: "", pricePerKwh: "", maxPowerKw: "", chargerType: "home", location: "", notes: "",
 };
 
 function draftFrom(c: ChargingSession): Draft {

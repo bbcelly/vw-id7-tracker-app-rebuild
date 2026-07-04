@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3";
 import type { Snapshot } from "../domain/types.js";
 import { finalizeTrip } from "../domain/metrics.js";
+import { chargeSignal, chargerTypeFromSignal } from "../domain/charge-signal.js";
 import * as tripsRepo from "../repo/trips.js";
 import * as chargingRepo from "../repo/charging.js";
 import * as positionsRepo from "../repo/positions.js";
@@ -96,8 +97,7 @@ export class Detector {
       // Never stack sessions: if one is already open (e.g. a signal gap the
       // carry-forward couldn't bridge), treat this as the same charge.
       if (chargingRepo.openSession(this.db, "api")) return;
-      // selectivestatus carries no AC/DC signal (maxChargeCurrentAC is a car
-      // setting, not charger telemetry) — charger type stays unknown.
+      const sig = chargeSignal(next.source, next.raw);
       chargingRepo.createSession(this.db, {
         startTs: iso(this.cfg.now()),
         endTs: null,
@@ -106,8 +106,8 @@ export class Detector {
         energyKwh: null,
         cost: null,
         pricePerKwh: null,
-        maxPowerKw: null,
-        chargerType: null,
+        maxPowerKw: sig.powerKw,
+        chargerType: chargerTypeFromSignal(sig),
         location: null,
         lat: prev.lat ?? next.lat,
         lon: prev.lon ?? next.lon,
@@ -116,9 +116,27 @@ export class Detector {
       });
       this.log(`[detect] charging started at SOC ${next.soc ?? "?"}%`);
     }
+    if (prev.isCharging === true && next.isCharging === true) {
+      this.trackOpenChargeTelemetry(next);
+    }
     if (prev.isCharging === true && next.isCharging !== true) {
       this.closeOpenChargingSession(next.soc, this.cfg.now());
       this.log(`[detect] charging stopped at SOC ${next.soc ?? "?"}%`);
+    }
+  }
+
+  // Mid-charge: keep the open session's peak power current and upgrade the
+  // label to dc when the charger turns out to be one (power ramps up after
+  // the start tick). Never downgrades — a hand-edited type stays put.
+  private trackOpenChargeTelemetry(next: Snapshot): void {
+    const open = chargingRepo.openSession(this.db, "api");
+    if (!open) return;
+    const sig = chargeSignal(next.source, next.raw);
+    const maxPowerKw =
+      sig.powerKw !== null && sig.powerKw > (open.maxPowerKw ?? 0) ? sig.powerKw : open.maxPowerKw;
+    const chargerType = chargerTypeFromSignal(sig) === "dc" ? "dc" : open.chargerType;
+    if (maxPowerKw !== open.maxPowerKw || chargerType !== open.chargerType) {
+      chargingRepo.updateSession(this.db, open.id, { maxPowerKw, chargerType });
     }
   }
 
@@ -197,6 +215,7 @@ export class Detector {
     );
     if (action.kind === "insert") {
       if (chargingRepo.sessionCoveringWindow(this.db, "api", prev.ts, next.ts)) return;
+      const sig = chargeSignal(next.source, next.raw);
       chargingRepo.createSession(this.db, {
         startTs: iso(action.values.startTime),
         endTs: iso(action.values.endTime),
@@ -205,8 +224,8 @@ export class Detector {
         energyKwh: action.values.energyChargedKwh,
         cost: null,
         pricePerKwh: null,
-        maxPowerKw: null,
-        chargerType: null,
+        maxPowerKw: sig.powerKw,
+        chargerType: chargerTypeFromSignal(sig),
         location: null,
         lat: prev.lat,
         lon: prev.lon,
@@ -273,6 +292,7 @@ export class Detector {
       opts
     );
     if (ca.kind === "insert") {
+      const sig = chargeSignal(next.source, next.raw);
       chargingRepo.createSession(this.db, {
         startTs: iso(ca.values.startTime),
         endTs: iso(ca.values.endTime),
@@ -281,8 +301,8 @@ export class Detector {
         energyKwh: ca.values.energyChargedKwh,
         cost: null,
         pricePerKwh: null,
-        maxPowerKw: null,
-        chargerType: null,
+        maxPowerKw: sig.powerKw,
+        chargerType: chargerTypeFromSignal(sig),
         location: null,
         lat: null,
         lon: null,

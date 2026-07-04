@@ -95,6 +95,69 @@ describe("API charging detection", () => {
   });
 });
 
+describe("charger-type labeling", () => {
+  const apiRaw = (chargeType: string, powerKw: number) =>
+    JSON.stringify({ charging: { chargingStatus: { value: { chargingState: "charging", chargePower_kW: powerKw, chargeType } } } });
+  const webRaw = (chargeType: string, powerKw: number) =>
+    JSON.stringify({ charging: { data: { chargingStatus: { chargePower_kW: powerKw, chargeType } } } });
+
+  it("labels a new session home by default (no telemetry)", () => {
+    detector.onSnapshot(snap(0, {}), snap(5, { isCharging: true, soc: 50 }));
+    const s = chargingRepo.openSession(db, "api")!;
+    expect(s.chargerType).toBe("home");
+    expect(s.maxPowerKw).toBeNull();
+  });
+
+  it("labels an AC charge home and records its power", () => {
+    detector.onSnapshot(snap(0, {}), snap(5, { isCharging: true, soc: 50, raw: apiRaw("ac", 11) }));
+    const s = chargingRepo.openSession(db, "api")!;
+    expect(s.chargerType).toBe("home");
+    expect(s.maxPowerKw).toBe(11);
+  });
+
+  it("labels a DC charge from telemetry", () => {
+    detector.onSnapshot(snap(0, {}), snap(5, { isCharging: true, soc: 50, raw: apiRaw("dc", 120) }));
+    const s = chargingRepo.openSession(db, "api")!;
+    expect(s.chargerType).toBe("dc");
+    expect(s.maxPowerKw).toBe(120);
+  });
+
+  it("upgrades an open session to DC and tracks max power mid-charge", () => {
+    detector.onSnapshot(snap(0, {}), snap(5, { isCharging: true, soc: 50, raw: apiRaw("ac", 11) }));
+    detector.onSnapshot(
+      snap(5, { isCharging: true, soc: 50 }),
+      snap(10, { isCharging: true, soc: 55, raw: apiRaw("dc", 120) })
+    );
+    const s = chargingRepo.openSession(db, "api")!;
+    expect(s.chargerType).toBe("dc");
+    expect(s.maxPowerKw).toBe(120);
+    // a later weaker tick must not lower the recorded max
+    detector.onSnapshot(
+      snap(10, { isCharging: true, soc: 55 }),
+      snap(15, { isCharging: true, soc: 58, raw: apiRaw("dc", 60) })
+    );
+    expect(chargingRepo.openSession(db, "api")!.maxPowerKw).toBe(120);
+  });
+
+  it("labels web-derived sessions from web telemetry (home for AC)", () => {
+    const web = (min: number, over: Partial<Snapshot>): Snapshot =>
+      snap(min, { source: "web", isParked: null, isCharging: null, lat: null, lon: null, ...over });
+    detector.onSnapshot(
+      web(0, { odometerKm: 1000, soc: 50 }),
+      web(5, { odometerKm: 1000, soc: 57, raw: webRaw("ac", 4.8) })
+    );
+    const s = chargingRepo.latestSession(db, "web")!;
+    expect(s.chargerType).toBe("home");
+    expect(s.maxPowerKw).toBe(4.8);
+  });
+
+  it("labels SOC-delta sessions home by default", () => {
+    socDelta = true;
+    detector.onSnapshot(snap(0, { soc: 50 }), snap(5, { soc: 55 }));
+    expect(chargingRepo.latestSession(db, "api")!.chargerType).toBe("home");
+  });
+});
+
 describe("API trip detection", () => {
   it("confirms a trip only after the debounce and closes it with metrics", () => {
     const parked = snap(0, { isParked: true, soc: 80, odometerKm: 1000 });
