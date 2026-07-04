@@ -5,7 +5,8 @@ import { parsePagination } from "../server.js";
 import * as tripsRepo from "../../repo/trips.js";
 import * as positionsRepo from "../../repo/positions.js";
 import { getNumberSetting } from "../../repo/settings.js";
-import { finalizeTrip } from "../../domain/metrics.js";
+import { finalizeTrip, mergeTripPatch } from "../../domain/metrics.js";
+import { tripCrossFieldError } from "../../domain/validate.js";
 import { DEFAULT_BATTERY_KWH, type TripInsert } from "../../domain/types.js";
 
 const isoDate = z.string().datetime({ offset: true });
@@ -30,8 +31,6 @@ const tripBody = z
   .strip();
 
 const tripPatch = tripBody.partial();
-
-const DERIVED = ["distanceKm", "energyKwh", "consumption", "durationMin"] as const;
 
 export function registerTripRoutes(app: FastifyInstance, deps: AppDeps): void {
   const battery = () => getNumberSetting(deps.db, "battery_capacity_kwh", DEFAULT_BATTERY_KWH);
@@ -64,6 +63,8 @@ export function registerTripRoutes(app: FastifyInstance, deps: AppDeps): void {
       notes: b.notes ?? null,
       source: "manual",
     };
+    const crossErr = tripCrossFieldError(insert);
+    if (crossErr) return reply.status(400).send({ error: crossErr });
     return reply.status(201).send(tripsRepo.createTrip(deps.db, finalizeTrip(insert, battery())));
   });
 
@@ -74,11 +75,12 @@ export function registerTripRoutes(app: FastifyInstance, deps: AppDeps): void {
     const parsed = tripPatch.safeParse(req.body);
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.issues[0].message });
 
-    // Manual values in this write win; derived fields not supplied are
-    // recomputed from the merged inputs (computed values only fill gaps).
-    const merged = { ...existing, ...parsed.data } as TripInsert & { id: number };
-    for (const k of DERIVED) if (!(k in parsed.data)) (merged as TripInsert)[k] = null;
-    const finalized = finalizeTrip(merged, battery());
+    // Manual values in this write win; a derived field is recomputed only
+    // when this patch touches one of its inputs — otherwise a manual value
+    // from an earlier request survives (manual always wins).
+    const finalized = mergeTripPatch(existing, parsed.data as Partial<TripInsert>, battery());
+    const crossErr = tripCrossFieldError(finalized);
+    if (crossErr) return reply.status(400).send({ error: crossErr });
     const { id: _id, source: _src, ...patch } = finalized;
     return tripsRepo.updateTrip(deps.db, id, patch);
   });

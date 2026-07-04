@@ -80,19 +80,18 @@ describe("API charging detection", () => {
     expect(closed.energyKwh).toBeCloseTo(((80 - 41) / 100) * 77, 2);
   });
 
-  it("bridges a poll that omits the charging job (no stop+restart fragmentation)", () => {
+  it("never stacks a second open session even when prev reads as not-charging", () => {
     const a = snap(0, { isCharging: false, soc: 40 });
     const b = snap(5, { isCharging: true, soc: 42 });
     detector.onSnapshot(a, b);
-    // charging job missing this poll:
+    expect(chargingRepo.listSessions(db, { limit: 10, offset: 0 }).total).toBe(1);
+    // A stored charging-job gap (isCharging=null) followed by charging again
+    // must NOT open a second session while one is open.
     const gap = snap(10, { isCharging: null, chargingState: null, soc: 45 });
-    detector.onSnapshot(b, gap);
-    expect(chargingRepo.openSession(db, "api")).not.toBeNull();
-    expect(chargingRepo.listSessions(db, { limit: 10, offset: 0 }).total).toBe(1);
-    // next poll reports charging again — still one session
     const c = snap(15, { isCharging: true, soc: 47 });
-    detector.onSnapshot({ ...gap, isCharging: true }, c);
+    detector.onSnapshot(gap, c);
     expect(chargingRepo.listSessions(db, { limit: 10, offset: 0 }).total).toBe(1);
+    expect(chargingRepo.openSession(db, "api")).not.toBeNull();
   });
 });
 
@@ -221,11 +220,32 @@ describe("boot reconciliation + crash guard", () => {
       startSoc: 80, endSoc: null, distanceKm: null, energyKwh: null, consumption: null,
       durationMin: null, notes: null, source: "api",
     });
-    detector.reconcileOnBoot(snap(0, { isCharging: false, isParked: true, soc: 75, odometerKm: 950 }));
+    detector.reconcile(snap(0, { isCharging: false, isPlugged: false, isParked: true, soc: 75, odometerKm: 950 }));
     expect(chargingRepo.openSession(db, "api")).toBeNull();
     expect(tripsRepo.openTrip(db, "api")).toBeNull();
     const t = tripsRepo.latestTrip(db, "api")!;
     expect(t.distanceKm).toBe(50);
+  });
+
+  it("reconcile is conservative: null flags, plugged cable, or web rows close nothing", () => {
+    chargingRepo.createSession(db, {
+      startTs: at(-120).toISOString(), endTs: null, startSoc: 40, endSoc: null,
+      energyKwh: null, cost: null, pricePerKwh: null, maxPowerKw: null,
+      chargerType: null, location: null, lat: null, lon: null, notes: null, source: "api",
+    });
+    tripsRepo.createTrip(db, {
+      startTs: at(-90).toISOString(), endTs: null, startOdometer: 900, endOdometer: null,
+      startSoc: 80, endSoc: null, distanceKm: null, energyKwh: null, consumption: null,
+      durationMin: null, notes: null, source: "api",
+    });
+    // web row: isParked/isCharging null → must not close anything
+    detector.reconcile(snap(0, { source: "web", isParked: null, isCharging: null }));
+    // charge done but still plugged → session stays open
+    detector.reconcile(snap(0, { isCharging: false, isPlugged: true, isParked: null }));
+    expect(chargingRepo.openSession(db, "api")).not.toBeNull();
+    // mid-drive with unknown parked state → trip stays open
+    detector.reconcile(snap(0, { isCharging: null, isPlugged: false, isParked: null }));
+    expect(tripsRepo.openTrip(db, "api")).not.toBeNull();
   });
 
   it("a failing handler never throws out of onSnapshot", () => {
@@ -233,5 +253,11 @@ describe("boot reconciliation + crash guard", () => {
     expect(() =>
       detector.onSnapshot(snap(0, { isCharging: false }), snap(5, { isCharging: true }))
     ).not.toThrow();
+  });
+
+  it("a failing debounced trip commit never crashes (timer runs outside onSnapshot)", () => {
+    detector.onSnapshot(snap(0, { isParked: true }), snap(5, { isParked: false }));
+    db.exec("DROP TABLE trips");
+    expect(() => vi.advanceTimersByTime(3 * 60_000 + 1)).not.toThrow();
   });
 });

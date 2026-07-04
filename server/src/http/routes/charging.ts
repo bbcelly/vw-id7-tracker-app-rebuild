@@ -4,7 +4,8 @@ import type { AppDeps } from "../server.js";
 import { parsePagination } from "../server.js";
 import * as chargingRepo from "../../repo/charging.js";
 import { getNumberSetting } from "../../repo/settings.js";
-import { finalizeCharge } from "../../domain/metrics.js";
+import { finalizeCharge, mergeChargePatch } from "../../domain/metrics.js";
+import { chargeCrossFieldError } from "../../domain/validate.js";
 import { DEFAULT_BATTERY_KWH, type ChargingInsert } from "../../domain/types.js";
 
 const isoDate = z.string().datetime({ offset: true });
@@ -29,7 +30,6 @@ const chargeBody = z
   .strip();
 
 const chargePatch = chargeBody.partial();
-const DERIVED = ["energyKwh", "cost"] as const;
 
 export function registerChargingRoutes(app: FastifyInstance, deps: AppDeps): void {
   const battery = () => getNumberSetting(deps.db, "battery_capacity_kwh", DEFAULT_BATTERY_KWH);
@@ -62,6 +62,8 @@ export function registerChargingRoutes(app: FastifyInstance, deps: AppDeps): voi
       notes: b.notes ?? null,
       source: "manual",
     };
+    const crossErr = chargeCrossFieldError(insert);
+    if (crossErr) return reply.status(400).send({ error: crossErr });
     return reply
       .status(201)
       .send(chargingRepo.createSession(deps.db, finalizeCharge(insert, battery())));
@@ -74,9 +76,11 @@ export function registerChargingRoutes(app: FastifyInstance, deps: AppDeps): voi
     const parsed = chargePatch.safeParse(req.body);
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.issues[0].message });
 
-    const merged = { ...existing, ...parsed.data } as ChargingInsert & { id: number };
-    for (const k of DERIVED) if (!(k in parsed.data)) (merged as ChargingInsert)[k] = null;
-    const finalized = finalizeCharge(merged, battery());
+    // Recompute a derived field only when this patch touches its inputs —
+    // manual values from earlier requests survive (manual always wins).
+    const finalized = mergeChargePatch(existing, parsed.data as Partial<ChargingInsert>, battery());
+    const crossErr = chargeCrossFieldError(finalized);
+    if (crossErr) return reply.status(400).send({ error: crossErr });
     const { id: _id, source: _src, ...patch } = finalized;
     return chargingRepo.updateSession(deps.db, id, patch);
   });

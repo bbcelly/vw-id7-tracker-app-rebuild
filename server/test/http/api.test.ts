@@ -99,6 +99,70 @@ describe("trips API", () => {
     expect(t.consumption).toBeCloseTo((7.7 / 95) * 100, 2); // recomputed from manual distance
   });
 
+  it("PATCH: a manual value from an EARLIER request survives an unrelated patch", async () => {
+    const created = (
+      await app.inject({ method: "POST", url: "/api/trips", payload: { ...TRIP, distanceKm: 95 } })
+    ).json();
+    expect(created.distanceKm).toBe(95); // manual, differs from odometer delta (50)
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/trips/${created.id}`,
+      payload: { notes: "scenic route" },
+    });
+    const t = res.json();
+    expect(t.notes).toBe("scenic route");
+    expect(t.distanceKm).toBe(95); // NOT silently recomputed to 50
+    // but touching an input DOES recompute untouched derived fields
+    const res2 = await app.inject({
+      method: "PATCH",
+      url: `/api/trips/${created.id}`,
+      payload: { endOdometer: 1100 },
+    });
+    expect(res2.json().distanceKm).toBe(100); // recomputed from new odometer
+  });
+
+  it("rejects reversed time ranges and odometer order on create and patch", async () => {
+    expect(
+      (
+        await app.inject({
+          method: "POST",
+          url: "/api/trips",
+          payload: { ...TRIP, startTs: "2026-07-01T09:00:00.000Z", endTs: "2026-07-01T08:00:00.000Z" },
+        })
+      ).statusCode
+    ).toBe(400);
+    expect(
+      (
+        await app.inject({
+          method: "POST",
+          url: "/api/trips",
+          payload: { ...TRIP, startOdometer: 1050, endOdometer: 1000 },
+        })
+      ).statusCode
+    ).toBe(400);
+    const created = (
+      await app.inject({ method: "POST", url: "/api/trips", payload: TRIP })
+    ).json();
+    expect(
+      (
+        await app.inject({
+          method: "PATCH",
+          url: `/api/trips/${created.id}`,
+          payload: { endTs: "2026-06-30T09:00:00.000Z" }, // before existing startTs
+        })
+      ).statusCode
+    ).toBe(400);
+    expect(
+      (
+        await app.inject({
+          method: "POST",
+          url: "/api/charging",
+          payload: { startTs: "2026-07-01T20:00:00.000Z", startSoc: 80, endSoc: 40 },
+        })
+      ).statusCode
+    ).toBe(400); // a charge can't lower SOC
+  });
+
   it("paginates with total and clamps limit", async () => {
     for (let i = 0; i < 3; i++)
       await app.inject({ method: "POST", url: "/api/trips", payload: TRIP });
@@ -167,7 +231,7 @@ describe("stats API", () => {
     await app.inject({
       method: "POST",
       url: "/api/trips",
-      payload: { ...TRIP, startTs: "2026-07-02T08:00:00.000Z", endOdometer: 1150 }, // 150km, 7.7kWh
+      payload: { ...TRIP, startTs: "2026-07-02T08:00:00.000Z", endTs: "2026-07-02T09:30:00.000Z", endOdometer: 1150 }, // 150km, 7.7kWh
     });
     const s = (await app.inject({ url: "/api/stats" })).json();
     expect(s.tripCount).toBe(2);

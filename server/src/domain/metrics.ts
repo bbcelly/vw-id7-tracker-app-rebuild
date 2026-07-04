@@ -45,6 +45,55 @@ export function finalizeTrip<T extends TripInsert>(trip: T, batteryKwh: number):
   };
 }
 
+// Which derived field must be recomputed when which input fields change.
+// A PATCH only invalidates a derived value when it touches one of that
+// value's inputs — otherwise a manually-entered value from an earlier
+// request must survive ("manual values always win").
+const TRIP_DERIVED_DEPS: Record<string, (keyof TripInsert)[]> = {
+  distanceKm: ["startOdometer", "endOdometer"],
+  energyKwh: ["startSoc", "endSoc"],
+  consumption: ["startOdometer", "endOdometer", "startSoc", "endSoc", "distanceKm", "energyKwh"],
+  durationMin: ["startTs", "endTs"],
+};
+
+const CHARGE_DERIVED_DEPS: Record<string, (keyof ChargingInsert)[]> = {
+  energyKwh: ["startSoc", "endSoc"],
+  cost: ["startSoc", "endSoc", "energyKwh", "pricePerKwh"],
+};
+
+function applyPatch<T extends Record<string, unknown>>(
+  existing: T,
+  patch: Partial<T>,
+  deps: Record<string, (keyof T)[]>
+): T {
+  const merged: T = { ...existing, ...patch };
+  for (const [field, inputs] of Object.entries(deps)) {
+    if (field in patch) continue; // explicitly set in this write — manual wins
+    if (inputs.some((k) => (k as string) in patch)) {
+      (merged as Record<string, unknown>)[field] = null; // input changed — recompute
+    }
+  }
+  return merged;
+}
+
+/** Merge a PATCH into an existing trip, recomputing only affected derived fields. */
+export function mergeTripPatch<T extends TripInsert>(
+  existing: T,
+  patch: Partial<TripInsert>,
+  batteryKwh: number
+): T {
+  return finalizeTrip(applyPatch(existing, patch as Partial<T>, TRIP_DERIVED_DEPS as never), batteryKwh);
+}
+
+/** Merge a PATCH into an existing charging session, recomputing only affected derived fields. */
+export function mergeChargePatch<T extends ChargingInsert>(
+  existing: T,
+  patch: Partial<ChargingInsert>,
+  batteryKwh: number
+): T {
+  return finalizeCharge(applyPatch(existing, patch as Partial<T>, CHARGE_DERIVED_DEPS as never), batteryKwh);
+}
+
 /** Same gap-filling contract for charging sessions. */
 export function finalizeCharge<T extends ChargingInsert>(
   sess: T,

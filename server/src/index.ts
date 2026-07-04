@@ -50,8 +50,10 @@ const poller = new Poller(db, source, detector, {
 });
 
 // Stop events that happened while the app was down never fire — reconcile
-// open trips/sessions against the last stored status before polling resumes.
-detector.reconcileOnBoot(snapshotsRepo.latestSnapshot(db));
+// open trips/sessions against the last stored API status before polling
+// resumes. (API-source only: web rows lack the parked flag, and detected
+// open rows are api-source; the poller re-runs this on primary recovery.)
+detector.reconcile(snapshotsRepo.latestSnapshotBySource(db, "api"));
 
 const app = buildServer({ db, poller, source });
 

@@ -76,18 +76,16 @@ export class Detector {
       guarded("webDerive", () => this.webDerive(prev, next));
       return;
     }
+    // Source purity: after a primary/fallback flip the previous row belongs to
+    // the other source — skip edge detection entirely (fresh start), exactly
+    // like the original's prevIdData reset on reconnect. The charging-job
+    // carry-forward happens in the poller BEFORE the snapshot is stored, so
+    // the bridged value survives the DB round-trip into the next tick's prev.
     if (next.source !== "api" || (prev !== null && prev.source !== "api")) return;
 
-    // selectivestatus occasionally omits the charging job for a poll; a gap
-    // would read as stop+restart and fragment one charge into several sessions.
-    const effective: Snapshot =
-      next.isCharging === null && prev?.isCharging != null
-        ? { ...next, isCharging: prev.isCharging, chargingState: prev.chargingState }
-        : next;
-
-    guarded("charging", () => this.apiCharging(prev, effective));
-    guarded("trips", () => this.apiTrips(prev, effective));
-    guarded("socDelta", () => this.apiSocDelta(prev, effective));
+    guarded("charging", () => this.apiCharging(prev, next));
+    guarded("trips", () => this.apiTrips(prev, next));
+    guarded("socDelta", () => this.apiSocDelta(prev, next));
   }
 
   // --- API path: edge detection ---
@@ -95,6 +93,9 @@ export class Detector {
   private apiCharging(prev: Snapshot | null, next: Snapshot): void {
     if (prev === null) return;
     if (prev.isCharging !== true && next.isCharging === true) {
+      // Never stack sessions: if one is already open (e.g. a signal gap the
+      // carry-forward couldn't bridge), treat this as the same charge.
+      if (chargingRepo.openSession(this.db, "api")) return;
       // selectivestatus carries no AC/DC signal (maxChargeCurrentAC is a car
       // setting, not charger telemetry) — charger type stays unknown.
       chargingRepo.createSession(this.db, {
@@ -135,28 +136,13 @@ export class Detector {
       };
       if (this.debounceTimer) clearTimeout(this.debounceTimer);
       this.debounceTimer = setTimeout(() => {
-        const p = this.pendingTripStart;
-        if (!p) return;
-        const trip = tripsRepo.createTrip(this.db, {
-          startTs: iso(p.time),
-          endTs: null,
-          startOdometer: p.odo,
-          endOdometer: null,
-          startSoc: p.soc,
-          endSoc: null,
-          distanceKm: null,
-          energyKwh: null,
-          consumption: null,
-          durationMin: null,
-          notes: null,
-          source: "api",
-        });
-        if (this.cfg.positionTrackingEnabled() && p.lat != null && p.lon != null) {
-          positionsRepo.addPosition(this.db, trip.id, iso(p.time), p.lat, p.lon);
+        try {
+          this.commitPendingTrip();
+        } catch (err) {
+          // Timer callbacks run outside onSnapshot's guards — an unhandled
+          // throw here would crash the whole process.
+          this.log(`[detect] debounced trip commit failed: ${err instanceof Error ? err.message : err}`);
         }
-        this.log(`[detect] trip #${trip.id} confirmed after debounce`);
-        this.pendingTripStart = null;
-        this.debounceTimer = null;
       }, this.cfg.debounceMs());
     }
 
@@ -170,6 +156,31 @@ export class Detector {
       }
       this.closeOpenTrip(next.soc, next.odometerKm, this.cfg.now(), next.lat, next.lon);
     }
+  }
+
+  private commitPendingTrip(): void {
+    const p = this.pendingTripStart;
+    if (!p) return;
+    const trip = tripsRepo.createTrip(this.db, {
+      startTs: iso(p.time),
+      endTs: null,
+      startOdometer: p.odo,
+      endOdometer: null,
+      startSoc: p.soc,
+      endSoc: null,
+      distanceKm: null,
+      energyKwh: null,
+      consumption: null,
+      durationMin: null,
+      notes: null,
+      source: "api",
+    });
+    if (this.cfg.positionTrackingEnabled() && p.lat != null && p.lon != null) {
+      positionsRepo.addPosition(this.db, trip.id, iso(p.time), p.lat, p.lon);
+    }
+    this.log(`[detect] trip #${trip.id} confirmed after debounce`);
+    this.pendingTripStart = null;
+    this.debounceTimer = null;
   }
 
   private apiSocDelta(prev: Snapshot | null, next: Snapshot): void {
@@ -357,16 +368,22 @@ export class Detector {
    * current status contradicts — a dangling open session otherwise suppresses
    * SOC-delta detection indefinitely.
    */
-  reconcileOnBoot(latest: Snapshot | null): void {
-    if (!latest) return;
-    if (latest.isCharging !== true) {
+  reconcile(latest: Snapshot | null): void {
+    if (!latest || latest.source !== "api") return;
+    // Only close an orphaned charge when the car explicitly reports NOT
+    // charging (null = dropped charging job, not evidence). The plug check
+    // avoids closing a charge that is merely paused while still plugged in.
+    if (latest.isCharging === false && latest.isPlugged !== true) {
       if (this.closeOpenChargingSession(latest.soc, this.cfg.now())) {
-        this.log("[detect] closed charging session orphaned across a restart");
+        this.log("[detect] closed charging session orphaned across an outage/restart");
       }
     }
-    if (latest.isParked !== false) {
+    // Only close an orphaned trip when the car is explicitly parked. isParked
+    // is null on web rows and can be unknown mid-drive — `!== false` here
+    // would truncate an in-progress trip on any mid-drive reconnect.
+    if (latest.isParked === true) {
       if (this.closeOpenTrip(latest.soc, latest.odometerKm, this.cfg.now())) {
-        this.log("[detect] closed trip orphaned across a restart");
+        this.log("[detect] closed trip orphaned across an outage/restart");
       }
     }
   }
