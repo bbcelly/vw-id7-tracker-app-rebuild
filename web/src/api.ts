@@ -73,6 +73,16 @@ export interface Stats {
   trend: Array<{ id: number; startTs: string; consumption: number; distanceKm: number | null }>;
 }
 
+export interface MonthlyStat {
+  month: string; // "YYYY-MM"
+  distanceKm: number;
+  avgConsumption: number | null;
+  chargedKwh: number;
+  chargeCost: number;
+  tripCount: number;
+  chargeCount: number;
+}
+
 export interface Page<T> {
   items: T[];
   total: number;
@@ -96,6 +106,7 @@ export const api = {
   connect: () =>
     request<{ connected: boolean; state: string; lastError: string | null }>("/api/connect", { method: "POST" }),
   stats: () => request<Stats>("/api/stats"),
+  monthly: () => request<MonthlyStat[]>("/api/stats/monthly"),
 
   trips: (limit = 50, offset = 0) => request<Page<Trip>>(`/api/trips?limit=${limit}&offset=${offset}`),
   createTrip: (t: Partial<Trip>) => request<Trip>("/api/trips", { method: "POST", body: JSON.stringify(t) }),

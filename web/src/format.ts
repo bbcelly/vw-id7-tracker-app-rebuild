@@ -15,6 +15,17 @@ export function fmtDate(iso: string | null | undefined): string {
   return Number.isNaN(d.getTime()) ? "—" : dateFmt.format(d);
 }
 
+const monthFmt = new Intl.DateTimeFormat("en-GB", { month: "short", year: "numeric" });
+
+/** "2026-07" → "Jul 2026". */
+export function fmtMonth(ym: string | null | undefined): string {
+  if (!ym) return "—";
+  const m = /^(\d{4})-(\d{2})$/.exec(ym);
+  if (!m) return "—";
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, 1);
+  return Number.isNaN(d.getTime()) ? "—" : monthFmt.format(d);
+}
+
 export function fmtDuration(min: number | null | undefined): string {
   if (min == null || !Number.isFinite(min)) return "—";
   const whole = Math.round(min);

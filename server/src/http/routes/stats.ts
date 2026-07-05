@@ -48,4 +48,58 @@ export function registerStatsRoutes(app: FastifyInstance, deps: AppDeps): void {
       trend,
     };
   });
+
+  // Per-month breakdown of usage, newest month first, capped to the last 12
+  // months with any activity. Months are bucketed by UTC calendar month, like
+  // every other aggregate here.
+  app.get("/api/stats/monthly", async () => {
+    const tripRows = deps.db
+      .prepare(
+        `SELECT strftime('%Y-%m', start_ts) month,
+                COUNT(*) tripCount,
+                COALESCE(SUM(distance_km), 0) distance,
+                COALESCE(SUM(CASE WHEN distance_km > 0 AND energy_kwh IS NOT NULL THEN distance_km END), 0) cd,
+                COALESCE(SUM(CASE WHEN distance_km > 0 AND energy_kwh IS NOT NULL THEN energy_kwh END), 0) ce
+         FROM trips GROUP BY month`
+      )
+      .all() as Array<{ month: string; tripCount: number; distance: number; cd: number; ce: number }>;
+
+    const chargeRows = deps.db
+      .prepare(
+        `SELECT strftime('%Y-%m', start_ts) month,
+                COUNT(*) chargeCount,
+                COALESCE(SUM(energy_kwh), 0) chargedKwh,
+                COALESCE(SUM(cost), 0) chargeCost
+         FROM charging_sessions GROUP BY month`
+      )
+      .all() as Array<{ month: string; chargeCount: number; chargedKwh: number; chargeCost: number }>;
+
+    const byMonth = new Map<
+      string,
+      { month: string; distanceKm: number; avgConsumption: number | null; chargedKwh: number; chargeCost: number; tripCount: number; chargeCount: number }
+    >();
+    const get = (month: string) => {
+      let row = byMonth.get(month);
+      if (!row) {
+        row = { month, distanceKm: 0, avgConsumption: null, chargedKwh: 0, chargeCost: 0, tripCount: 0, chargeCount: 0 };
+        byMonth.set(month, row);
+      }
+      return row;
+    };
+
+    for (const r of tripRows) {
+      const row = get(r.month);
+      row.tripCount = r.tripCount;
+      row.distanceKm = round(r.distance, 1) ?? 0;
+      row.avgConsumption = r.cd > 0 ? round((r.ce / r.cd) * 100, 2) : null;
+    }
+    for (const r of chargeRows) {
+      const row = get(r.month);
+      row.chargeCount = r.chargeCount;
+      row.chargedKwh = round(r.chargedKwh, 2) ?? 0;
+      row.chargeCost = round(r.chargeCost, 2) ?? 0;
+    }
+
+    return [...byMonth.values()].sort((a, b) => b.month.localeCompare(a.month)).slice(0, 12);
+  });
 }

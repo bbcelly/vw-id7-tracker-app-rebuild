@@ -241,6 +241,44 @@ describe("stats API", () => {
     expect(s.trend).toHaveLength(2);
     expect(s.trend[0].startTs < s.trend[1].startTs).toBe(true); // oldest first
   });
+
+  it("breaks down usage by month, newest first, including charge-only months", async () => {
+    await app.inject({ method: "POST", url: "/api/trips", payload: TRIP }); // Jul: 50km, 7.7kWh
+    await app.inject({
+      method: "POST",
+      url: "/api/charging",
+      payload: { startTs: "2026-07-03T20:00:00.000Z", energyKwh: 10, cost: 4 }, // Jul charge
+    });
+    await app.inject({
+      method: "POST",
+      url: "/api/charging",
+      payload: { startTs: "2026-06-15T20:00:00.000Z", energyKwh: 5, cost: 2 }, // Jun: charge only
+    });
+
+    const rows = (await app.inject({ url: "/api/stats/monthly" })).json();
+    expect(rows).toHaveLength(2);
+    expect(rows[0].month).toBe("2026-07"); // newest first
+    expect(rows[1].month).toBe("2026-06");
+
+    expect(rows[0]).toMatchObject({
+      distanceKm: 50,
+      tripCount: 1,
+      chargeCount: 1,
+      chargedKwh: 10,
+      chargeCost: 4,
+    });
+    expect(rows[0].avgConsumption).toBeCloseTo((7.7 / 50) * 100, 2);
+
+    expect(rows[1]).toMatchObject({
+      month: "2026-06",
+      tripCount: 0,
+      distanceKm: 0,
+      avgConsumption: null,
+      chargeCount: 1,
+      chargedKwh: 5,
+      chargeCost: 2,
+    });
+  });
 });
 
 describe("settings API", () => {

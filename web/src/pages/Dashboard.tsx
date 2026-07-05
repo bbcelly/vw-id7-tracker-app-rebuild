@@ -3,10 +3,11 @@ import { api } from "../api";
 import { useApi } from "../hooks";
 import StatCard from "../components/StatCard";
 import TrendChart from "../components/TrendChart";
-import { fmtDate, fmtKm, fmtKwh, fmtMoney } from "../format";
+import { fmtConsumption, fmtDate, fmtKm, fmtKwh, fmtMoney, fmtMonth } from "../format";
 
 export default function Dashboard() {
   const stats = useApi(api.stats);
+  const monthly = useApi(api.monthly);
   const trips = useApi(() => api.trips(5, 0));
   const charges = useApi(() => api.charging(5, 0));
   const settings = useApi(api.settings);
@@ -33,6 +34,37 @@ export default function Dashboard() {
         <div className="stat-label">Consumption trend — last {s?.trend.length ?? 0} trips</div>
         <div className="mt">
           <TrendChart data={s?.trend ?? []} />
+        </div>
+      </div>
+
+      <div className="panel mt">
+        <div className="stat-label">Monthly breakdown</div>
+        <div className="table-wrap mt">
+          <table>
+            <thead>
+              <tr>
+                <th>Month</th>
+                <th className="num">Distance</th>
+                <th className="num">Charged</th>
+                <th className="num">Cost</th>
+                <th className="num">Consumption</th>
+                <th className="num">Trips</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(monthly.data ?? []).map((m) => (
+                <tr key={m.month}>
+                  <td>{fmtMonth(m.month)}</td>
+                  <td className="num">{fmtKm(m.distanceKm)} km</td>
+                  <td className="num">{fmtKwh(m.chargedKwh)} kWh</td>
+                  <td className="num">{fmtMoney(m.chargeCost, currency)}</td>
+                  <td className="num muted">{fmtConsumption(m.avgConsumption)} kWh/100</td>
+                  <td className="num">{m.tripCount}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {monthly.data && monthly.data.length === 0 && <div className="empty">No activity yet</div>}
         </div>
       </div>
 
