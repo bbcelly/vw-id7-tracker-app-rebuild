@@ -8,6 +8,7 @@ import { registerTripRoutes } from "./routes/trips.js";
 import { registerChargingRoutes } from "./routes/charging.js";
 import { registerStatsRoutes } from "./routes/stats.js";
 import { registerSettingsRoutes } from "./routes/settings.js";
+import { registerDataRoutes } from "./routes/data.js";
 
 export interface AppDeps {
   db: Database.Database;
@@ -18,6 +19,11 @@ export interface AppDeps {
 
 export function buildServer(deps: AppDeps): FastifyInstance {
   const app = Fastify({ logger: false });
+
+  // CSV import posts the raw file body; keep it as an unparsed string.
+  app.addContentTypeParser("text/csv", { parseAs: "string" }, (_req, body, done) =>
+    done(null, body)
+  );
 
   app.setErrorHandler((err, _req, reply) => {
     const anyErr = err as { statusCode?: number; message?: string };
@@ -30,6 +36,7 @@ export function buildServer(deps: AppDeps): FastifyInstance {
   registerChargingRoutes(app, deps);
   registerStatsRoutes(app, deps);
   registerSettingsRoutes(app, deps);
+  registerDataRoutes(app, deps);
 
   return app;
 }

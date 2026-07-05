@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useApi } from "../hooks";
+import CsvControls from "../components/CsvControls";
 
 type Form = {
   vw_username: string;
@@ -160,6 +161,19 @@ export default function Settings() {
               onChange={(e) => setForm({ ...form, soc_delta_threshold: e.target.value })} />
           </label>
         )}
+      </div>
+
+      <div className="panel mt">
+        <div className="stat-label">Data (CSV export / import)</div>
+        <p className="faint mt" style={{ fontSize: 13 }}>
+          Back up or restore your data. Import upserts by <code>id</code>: rows with a matching id
+          update the existing record, new/blank ids are inserted.
+        </p>
+        <div className="form-row mt" style={{ alignItems: "center", gap: 20 }}>
+          <div><span className="muted" style={{ fontSize: 13 }}>Trips</span><CsvControls entity="trips" /></div>
+          <div><span className="muted" style={{ fontSize: 13 }}>Charging</span><CsvControls entity="charging" /></div>
+        </div>
+        <div className="mt"><span className="muted" style={{ fontSize: 13 }}>Telemetry snapshots</span><CsvControls entity="snapshots" /></div>
       </div>
 
       <div className="row mt">
