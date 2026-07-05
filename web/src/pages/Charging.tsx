@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api, type ChargingSession } from "../api";
 import { useApi } from "../hooks";
 import Modal from "../components/Modal";
+import CsvControls from "../components/CsvControls";
 import { fmtDate, fmtKwh, fmtMoney, isoToLocalInput, localInputToIso } from "../format";
 
 const PAGE = 50;
@@ -113,7 +114,10 @@ export default function Charging() {
               : "…"}
           </p>
         </div>
-        <button className="btn" onClick={() => open("new")}>+ Add charge</button>
+        <div className="row" style={{ gap: 8, alignItems: "center" }}>
+          <CsvControls entity="charging" onImported={() => page.reload()} />
+          <button className="btn" onClick={() => open("new")}>+ Add charge</button>
+        </div>
       </div>
 
       {page.error && <div className="error-banner">{page.error}</div>}

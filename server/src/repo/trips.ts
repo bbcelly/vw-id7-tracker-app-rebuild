@@ -79,6 +79,33 @@ export function listTrips(
   return { items, total };
 }
 
+/** Every trip, oldest first — for full CSV export. */
+export function allTrips(db: Database.Database): Trip[] {
+  return db.prepare("SELECT * FROM trips ORDER BY start_ts, id").all().map(rowToTrip);
+}
+
+/**
+ * Insert or (when the id already exists) update a trip by explicit id — the
+ * primitive behind CSV import's upsert-by-id. A row with no id (id <= 0) is
+ * inserted with an auto-assigned id.
+ */
+export function upsertTrip(db: Database.Database, t: Trip): "inserted" | "updated" {
+  if (t.id && getTrip(db, t.id)) {
+    const { id: _id, ...rest } = t;
+    updateTrip(db, t.id, rest);
+    return "updated";
+  }
+  if (t.id) {
+    db.prepare(
+      `INSERT INTO trips (id, ${Object.values(COLS).join(", ")})
+       VALUES (?, ${Object.keys(COLS).map(() => "?").join(", ")})`
+    ).run(t.id, ...(Object.keys(COLS) as (keyof TripInsert)[]).map((k) => t[k]));
+    return "inserted";
+  }
+  createTrip(db, t);
+  return "inserted";
+}
+
 /** The currently open detected trip (no end time) for a source, if any. */
 export function openTrip(db: Database.Database, source: string = "api"): Trip | null {
   const r = db

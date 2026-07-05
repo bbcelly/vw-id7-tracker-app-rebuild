@@ -83,6 +83,39 @@ export function listSessions(
   return { items, total };
 }
 
+/** Every charging session, oldest first — for full CSV export. */
+export function allSessions(db: Database.Database): ChargingSession[] {
+  return db
+    .prepare("SELECT * FROM charging_sessions ORDER BY start_ts, id")
+    .all()
+    .map(rowToSession);
+}
+
+/**
+ * Insert or (when the id already exists) update a session by explicit id — the
+ * primitive behind CSV import's upsert-by-id. A row with no id is inserted with
+ * an auto-assigned id.
+ */
+export function upsertSession(
+  db: Database.Database,
+  s: ChargingSession
+): "inserted" | "updated" {
+  if (s.id && getSession(db, s.id)) {
+    const { id: _id, ...rest } = s;
+    updateSession(db, s.id, rest);
+    return "updated";
+  }
+  if (s.id) {
+    db.prepare(
+      `INSERT INTO charging_sessions (id, ${Object.values(COLS).join(", ")})
+       VALUES (?, ${Object.keys(COLS).map(() => "?").join(", ")})`
+    ).run(s.id, ...(Object.keys(COLS) as (keyof ChargingInsert)[]).map((k) => s[k]));
+    return "inserted";
+  }
+  createSession(db, s);
+  return "inserted";
+}
+
 /** The currently open detected charging session for a source, if any. */
 export function openSession(db: Database.Database, source: string = "api"): ChargingSession | null {
   const r = db

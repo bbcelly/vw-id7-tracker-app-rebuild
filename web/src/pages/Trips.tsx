@@ -3,6 +3,7 @@ import { api, type Trip } from "../api";
 import { useApi } from "../hooks";
 import Modal from "../components/Modal";
 import MapView from "../components/MapView";
+import CsvControls from "../components/CsvControls";
 import { fmtDate, fmtDuration, fmtKm, fmtKwh, isoToLocalInput, localInputToIso } from "../format";
 
 const PAGE = 50;
@@ -103,7 +104,10 @@ export default function Trips() {
           <h1 className="page-title">Trips</h1>
           <p className="page-sub">{total} recorded — newest first.</p>
         </div>
-        <button className="btn" onClick={() => open("new")}>+ Add trip</button>
+        <div className="row" style={{ gap: 8, alignItems: "center" }}>
+          <CsvControls entity="trips" onImported={() => page.reload()} />
+          <button className="btn" onClick={() => open("new")}>+ Add trip</button>
+        </div>
       </div>
 
       {page.error && <div className="error-banner">{page.error}</div>}

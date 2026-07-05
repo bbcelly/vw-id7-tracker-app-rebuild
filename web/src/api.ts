@@ -88,6 +88,15 @@ export interface Page<T> {
   total: number;
 }
 
+export interface ImportResult {
+  inserted: number;
+  updated: number;
+  failed: number;
+  errors: { row: number; message: string }[];
+}
+
+export type CsvEntity = "trips" | "charging" | "snapshots";
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     headers: init?.body ? { "Content-Type": "application/json" } : undefined,
@@ -129,4 +138,16 @@ export const api = {
   settings: () => request<Record<string, string | null>>("/api/settings"),
   saveSettings: (s: Record<string, unknown>) =>
     request<{ saved: boolean }>("/api/settings", { method: "PUT", body: JSON.stringify(s) }),
+
+  exportUrl: (entity: CsvEntity) => `/api/${entity}/export.csv`,
+  importCsv: async (entity: CsvEntity, csv: string): Promise<ImportResult> => {
+    const res = await fetch(`/api/${entity}/import`, {
+      method: "POST",
+      headers: { "Content-Type": "text/csv" },
+      body: csv,
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) throw new Error((body as { error?: string } | null)?.error ?? `HTTP ${res.status}`);
+    return body as ImportResult;
+  },
 };
