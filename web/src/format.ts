@@ -15,6 +15,15 @@ export function fmtDate(iso: string | null | undefined): string {
   return Number.isNaN(d.getTime()) ? "—" : dateFmt.format(d);
 }
 
+const timeFmt = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
+
+/** ISO → "14:30" in the user's zone — for intraday chart ticks. */
+export function fmtTime(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "—" : timeFmt.format(d);
+}
+
 const monthFmt = new Intl.DateTimeFormat("en-GB", { month: "short", year: "numeric" });
 
 /** "2026-07" → "Jul 2026". */

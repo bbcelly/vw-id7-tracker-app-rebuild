@@ -1,5 +1,5 @@
 import type Database from "better-sqlite3";
-import type { Snapshot, SnapshotInsert, StatusSource } from "../domain/types.js";
+import type { Snapshot, SnapshotInsert, SocPoint, StatusSource } from "../domain/types.js";
 
 const bool = (v: unknown): boolean | null => (v === null ? null : v === 1);
 const toInt = (v: boolean | null): number | null => (v === null ? null : v ? 1 : 0);
@@ -38,6 +38,28 @@ export function insertSnapshot(db: Database.Database, s: SnapshotInsert): Snapsh
       s.chargingState, s.externalPower, s.targetSoc, s.lat, s.lon, s.raw, s.source
     );
   return { ...s, id: Number(res.lastInsertRowid) };
+}
+
+/**
+ * SoC over time from `sinceIso` onward, oldest first — for the battery-history
+ * chart. Rows without a SoC reading are skipped so the line has no gaps at the
+ * axis. Backed by idx_status_ts.
+ */
+export function socHistory(db: Database.Database, sinceIso: string): SocPoint[] {
+  return db
+    .prepare(
+      `SELECT ts, soc, target_soc targetSoc, is_charging isCharging
+       FROM vehicle_status
+       WHERE soc IS NOT NULL AND ts >= ?
+       ORDER BY ts ASC`
+    )
+    .all(sinceIso)
+    .map((r: any) => ({
+      ts: r.ts,
+      soc: r.soc,
+      targetSoc: r.targetSoc,
+      isCharging: r.isCharging === 1,
+    }));
 }
 
 /** Every snapshot, oldest first — for full CSV export. */

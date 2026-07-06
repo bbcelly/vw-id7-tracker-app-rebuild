@@ -73,6 +73,15 @@ export interface Stats {
   trend: Array<{ id: number; startTs: string; consumption: number; distanceKm: number | null }>;
 }
 
+export interface SocPoint {
+  ts: string;
+  soc: number;
+  targetSoc: number | null;
+  isCharging: boolean;
+}
+
+export type HistoryRange = "24h" | "7d" | "30d";
+
 export interface MonthlyStat {
   month: string; // "YYYY-MM"
   distanceKm: number;
@@ -116,6 +125,7 @@ export const api = {
     request<{ connected: boolean; state: string; lastError: string | null }>("/api/connect", { method: "POST" }),
   stats: () => request<Stats>("/api/stats"),
   monthly: () => request<MonthlyStat[]>("/api/stats/monthly"),
+  history: (range: HistoryRange) => request<SocPoint[]>(`/api/snapshots/history?range=${range}`),
 
   trips: (limit = 50, offset = 0) => request<Page<Trip>>(`/api/trips?limit=${limit}&offset=${offset}`),
   createTrip: (t: Partial<Trip>) => request<Trip>("/api/trips", { method: "POST", body: JSON.stringify(t) }),

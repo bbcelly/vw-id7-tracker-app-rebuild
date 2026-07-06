@@ -21,6 +21,14 @@ export interface Snapshot {
 }
 export type SnapshotInsert = Omit<Snapshot, "id">;
 
+/** A single point on the battery-history chart — SoC over time. */
+export interface SocPoint {
+  ts: string; // UTC ISO-8601
+  soc: number;
+  targetSoc: number | null;
+  isCharging: boolean;
+}
+
 export interface Trip {
   id: number;
   startTs: string;

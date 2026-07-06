@@ -281,6 +281,40 @@ describe("stats API", () => {
   });
 });
 
+describe("battery history API", () => {
+  const insert = (agoHours: number, soc: number | null, targetSoc: number | null, charging: number) =>
+    db
+      .prepare(
+        `INSERT INTO vehicle_status (ts, soc, target_soc, is_charging, source) VALUES (?, ?, ?, ?, 'api')`
+      )
+      .run(new Date(Date.now() - agoHours * 3600_000).toISOString(), soc, targetSoc, charging);
+
+  it("returns SoC points oldest-first within the range, excluding null SoC and older rows", async () => {
+    insert(2, 55, 80, 1); // in every window
+    insert(1, 60, 80, 0); // in every window, newer
+    insert(1.5, null, 80, 0); // null soc — excluded
+    insert(24 * 5, 90, 80, 0); // 5 days ago — outside 24h, inside 7d/30d
+
+    const day = (await app.inject({ url: "/api/snapshots/history?range=24h" })).json();
+    expect(day).toHaveLength(2);
+    expect(day[0].ts < day[1].ts).toBe(true); // oldest first
+    expect(day[0]).toMatchObject({ soc: 55, targetSoc: 80, isCharging: true });
+    expect(day[1].isCharging).toBe(false);
+
+    const week = (await app.inject({ url: "/api/snapshots/history?range=7d" })).json();
+    expect(week).toHaveLength(3); // includes the 5-day-old row
+  });
+
+  it("defaults to and clamps unknown range to 7d", async () => {
+    insert(24 * 3, 50, 80, 0); // 3 days ago: inside 7d, outside 24h
+
+    const missing = (await app.inject({ url: "/api/snapshots/history" })).json();
+    expect(missing).toHaveLength(1);
+    const bogus = (await app.inject({ url: "/api/snapshots/history?range=all" })).json();
+    expect(bogus).toHaveLength(1); // not a wider window
+  });
+});
+
 describe("settings API", () => {
   it("masks the password, keeps it on empty writes, updates on non-empty", async () => {
     await app.inject({

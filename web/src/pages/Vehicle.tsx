@@ -1,9 +1,12 @@
 import { useState } from "react";
-import { api } from "../api";
+import { api, type HistoryRange } from "../api";
 import { useApi } from "../hooks";
 import BatteryGauge from "../components/BatteryGauge";
+import BatteryHistoryChart from "../components/BatteryHistoryChart";
 import MapView from "../components/MapView";
 import { fmtDate, fmtKm } from "../format";
+
+const RANGES: HistoryRange[] = ["24h", "7d", "30d"];
 
 function Badge({ on, warn, label }: { on: boolean | null; warn?: boolean; label: string }) {
   const cls = on === true ? (warn ? "badge warn" : "badge on") : "badge";
@@ -24,6 +27,8 @@ const SOURCE_LABEL: Record<string, string> = {
 export default function Vehicle() {
   const status = useApi(api.status, 30_000); // auto-refresh
   const [syncing, setSyncing] = useState(false);
+  const [range, setRange] = useState<HistoryRange>("7d");
+  const history = useApi(() => api.history(range));
   const s = status.data?.snapshot ?? null;
   const conn = status.data?.connection;
 
@@ -107,6 +112,30 @@ export default function Vehicle() {
           </div>
         </div>
       )}
+
+      <div className="panel mt">
+        <div className="row spread">
+          <div className="stat-label">Battery history</div>
+          <div className="row">
+            {RANGES.map((r) => (
+              <button
+                key={r}
+                className={r === range ? "btn sm" : "btn ghost sm"}
+                onClick={() => {
+                  setRange(r);
+                  setTimeout(() => void history.reload(), 0);
+                }}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+        </div>
+        {history.error && <div className="error-banner mt">{history.error}</div>}
+        <div className="mt">
+          <BatteryHistoryChart data={history.data ?? []} range={range} loading={history.loading} />
+        </div>
+      </div>
     </div>
   );
 }

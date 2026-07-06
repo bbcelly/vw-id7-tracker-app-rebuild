@@ -1,7 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import type { AppDeps } from "../server.js";
 import * as chargingRepo from "../../repo/charging.js";
+import * as snapshotsRepo from "../../repo/snapshots.js";
 import { round } from "../../domain/metrics.js";
+
+const RANGE_HOURS: Record<string, number> = { "24h": 24, "7d": 24 * 7, "30d": 24 * 30 };
 
 export function registerStatsRoutes(app: FastifyInstance, deps: AppDeps): void {
   app.get("/api/stats", async () => {
@@ -101,5 +104,15 @@ export function registerStatsRoutes(app: FastifyInstance, deps: AppDeps): void {
     }
 
     return [...byMonth.values()].sort((a, b) => b.month.localeCompare(a.month)).slice(0, 12);
+  });
+
+  // Battery SoC over time for the vehicle history chart. `range` is one of
+  // 24h/7d/30d (default and fallback: 7d); anything else clamps to 7d so an
+  // arbitrary query string can't widen the window.
+  app.get("/api/snapshots/history", async (req) => {
+    const range = (req.query as { range?: string }).range ?? "7d";
+    const hours = RANGE_HOURS[range] ?? RANGE_HOURS["7d"];
+    const since = new Date(Date.now() - hours * 3600_000).toISOString();
+    return snapshotsRepo.socHistory(deps.db, since);
   });
 }
